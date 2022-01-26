@@ -181,17 +181,25 @@ struct Geometry {
 static shared_ptr<Geometry> g_ground, g_cube, g_cube2;
 
 // --------- Scene
+static const int g_numObjects = 2;
+static const int g_numViews = g_numObjects + 1;     // plus 1 because of the sky
+
+static int g_curViewIdx = 0;
 
 static const Cvec3 g_light1(2.0, 3.0, 14.0), g_light2(-2, -3.0, -5.0);  // define two lights positions in world space
+
 static Matrix4 g_skyRbt = Matrix4::makeTranslation(Cvec3(0.0, 0.25, 4.0));
-static Matrix4 g_objectRbt[2] = {
+
+static Matrix4 g_objectRbt[g_numObjects] = {
         Matrix4::makeTranslation(Cvec3(-1,0,0)),
         Matrix4::makeTranslation(Cvec3(1,0,0)),
 };
-static Cvec3f g_objectColors[2] = {
+static Cvec3f g_objectColors[] = {
         Cvec3f(1, 0, 0),
         Cvec3f(0,0,1),
 };
+
+
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
 
@@ -269,8 +277,9 @@ static void drawStuff() {
   const Matrix4 projmat = makeProjectionMatrix();
   sendProjectionMatrix(curSS, projmat);
 
-  // use the skyRbt as the eyeRbt
-  const Matrix4 eyeRbt = g_skyRbt;
+  // choose the correct Rbt as eyeRbt
+  const Matrix4 eyeRbt = (g_curViewIdx == 0) ? g_skyRbt : g_objectRbt[g_curViewIdx - 1];
+
   const Matrix4 invEyeRbt = inv(eyeRbt);
 
   const Cvec3 eyeLight1 = Cvec3(invEyeRbt * Cvec4(g_light1, 1)); // g_light1 position in eye coordinates
@@ -364,6 +373,15 @@ static void mouse(const int button, const int state, const int x, const int y) {
   g_mouseClickDown = g_mouseLClickButton || g_mouseRClickButton || g_mouseMClickButton;
 }
 
+static void cycleView() {
+    g_curViewIdx = (g_curViewIdx + 1) % g_numViews;
+
+    if (g_curViewIdx == 0) {
+        cout << "View from sky" << endl;
+    } else {
+        cout << "View from object " << g_curViewIdx << endl;
+    }
+}
 
 static void keyboard(const unsigned char key, const int x, const int y) {
   switch (key) {
@@ -385,6 +403,9 @@ static void keyboard(const unsigned char key, const int x, const int y) {
   case 'f':
     g_activeShader ^= 1;
     break;
+  case 'v':
+      cycleView();
+      break;
   }
   glutPostRedisplay();
 }
