@@ -20,6 +20,7 @@
 
 #include "cvec.h"
 #include "matrix4.h"
+#include "rigtform.h"
 #include "geometrymaker.h"
 #include "ppm.h"
 #include "glsupport.h"
