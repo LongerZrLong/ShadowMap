@@ -16,17 +16,11 @@ public:
     assert(norm2(Quat(1,0,0,0) - r_) < CS175_EPS2);
   }
 
-  RigTForm(const Cvec3& t, const Quat& r) {
-    //TODO
-  }
+  RigTForm(const Cvec3& t, const Quat& r) : t_(t), r_(r) {}
 
-  explicit RigTForm(const Cvec3& t) {
-    // TODO
-  }
+  explicit RigTForm(const Cvec3& t) : t_(t), r_() {}
 
-  explicit RigTForm(const Quat& r) {
-    // TODO
-  }
+  explicit RigTForm(const Quat& r) : t_(), r_(r) {}
 
   Cvec3 getTranslation() const {
     return t_;
@@ -47,16 +41,23 @@ public:
   }
 
   Cvec4 operator * (const Cvec4& a) const {
-    // TODO
+      return r_ * a + Cvec4(t_, 0) * a[3];
   }
 
   RigTForm operator * (const RigTForm& a) const {
-    // TODO
+      return RigTForm(
+              t_ + Cvec3(r_ * Cvec4(a.getTranslation(), 0)),
+              r_ * a.getRotation()
+              );
   }
 };
 
 inline RigTForm inv(const RigTForm& tform) {
-  // TODO
+    Quat r_inv = inv(tform.getRotation());
+    return RigTForm(
+            Cvec3(r_inv * Cvec4(-tform.getTranslation(), 1)),
+            r_inv
+            );
 }
 
 inline RigTForm transFact(const RigTForm& tform) {
@@ -68,8 +69,9 @@ inline RigTForm linFact(const RigTForm& tform) {
 }
 
 inline Matrix4 rigTFormToMatrix(const RigTForm& tform) {
-  // TODO
-  return m;
+    Matrix4 T = Matrix4::makeTranslation(tform.getTranslation());
+    Matrix4 R = quatToMatrix(tform.getRotation());
+    return T * R;
 }
 
 #endif

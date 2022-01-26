@@ -189,18 +189,18 @@ static int g_curViewIdx = 0;    // 0: sky, 1: red cube, 2: blue cube
 
 static const Cvec3 g_light1(2.0, 3.0, 14.0), g_light2(-2, -3.0, -5.0);  // define two lights positions in world space
 
-static Matrix4 g_skyRbt = Matrix4::makeTranslation(Cvec3(0.0, 0.25, 4.0));
+static RigTForm g_skyRbt = RigTForm(Cvec3(0.0, 0.25, 4.0));
 
-static Matrix4 g_objectRbt[g_numObjects] = {
-        Matrix4::makeTranslation(Cvec3(-1,0,0)),
-        Matrix4::makeTranslation(Cvec3(1,0,0)),
+static RigTForm g_objectRbt[g_numObjects] = {
+        RigTForm(Cvec3(-1,0,0)),
+        RigTForm(Cvec3(1,0,0)),
 };
 static Cvec3f g_objectColors[] = {
         Cvec3f(1, 0, 0),
         Cvec3f(0, 0, 1),
 };
 
-static Matrix4 g_Frame = linFact(g_skyRbt);    // default to world-sky frame
+static RigTForm g_Frame = linFact(g_skyRbt);    // default to world-sky frame
 
 static int g_curManipulatingObjIdx = 0;        // 0: sky, 1: red cube, 2: blue cube
 
@@ -283,9 +283,9 @@ static void drawStuff() {
   sendProjectionMatrix(curSS, projmat);
 
   // choose the correct Rbt as eyeRbt
-  const Matrix4 eyeRbt = (g_curViewIdx == 0) ? g_skyRbt : g_objectRbt[g_curViewIdx - 1];
+  const RigTForm eyeRbt = (g_curViewIdx == 0) ? g_skyRbt : g_objectRbt[g_curViewIdx - 1];
 
-  const Matrix4 invEyeRbt = inv(eyeRbt);
+  const RigTForm invEyeRbt = inv(eyeRbt);
 
   const Cvec3 eyeLight1 = Cvec3(invEyeRbt * Cvec4(g_light1, 1)); // g_light1 position in eye coordinates
   const Cvec3 eyeLight2 = Cvec3(invEyeRbt * Cvec4(g_light2, 1)); // g_light2 position in eye coordinates
@@ -295,8 +295,9 @@ static void drawStuff() {
   // draw ground
   // ===========
   //
-  const Matrix4 groundRbt = Matrix4();  // identity
-  Matrix4 MVM = invEyeRbt * groundRbt;
+  const RigTForm groundRbt = RigTForm();  // identity
+  RigTForm MVRigTForm = invEyeRbt * groundRbt;
+  Matrix4 MVM = rigTFormToMatrix(MVRigTForm);
   Matrix4 NMVM = normalMatrix(MVM);
   sendModelViewNormalMatrix(curSS, MVM, NMVM);
   safe_glUniform3f(curSS.h_uColor, 0.1, 0.95, 0.1); // set color
@@ -304,13 +305,15 @@ static void drawStuff() {
 
   // draw cubes
   // ==========
-  MVM = invEyeRbt * g_objectRbt[0];
+  MVRigTForm = invEyeRbt * g_objectRbt[0];
+  MVM = rigTFormToMatrix(MVRigTForm);
   NMVM = normalMatrix(MVM);
   sendModelViewNormalMatrix(curSS, MVM, NMVM);
   safe_glUniform3f(curSS.h_uColor, g_objectColors[0][0], g_objectColors[0][1], g_objectColors[0][2]);
   g_cube->draw(curSS);
 
-  MVM = invEyeRbt * g_objectRbt[1];
+  MVRigTForm = invEyeRbt * g_objectRbt[1];
+  MVM = rigTFormToMatrix(MVRigTForm);
   NMVM = normalMatrix(MVM);
   sendModelViewNormalMatrix(curSS, MVM, NMVM);
   safe_glUniform3f(curSS.h_uColor, g_objectColors[1][0], g_objectColors[1][1], g_objectColors[1][2]);
@@ -385,22 +388,22 @@ static void motion(const int x, const int y) {
 
   setFrame();
 
-  Matrix4 m;
+  RigTForm rigTForm;
   if (g_mouseLClickButton && !g_mouseRClickButton) { // left button down?
-    m = Matrix4::makeXRotation(-dy_rotate) * Matrix4::makeYRotation(dx_rotate);
+      rigTForm = RigTForm(Quat::makeXRotation(-dy_rotate) * Quat::makeYRotation(dx_rotate));
   }
   else if (g_mouseRClickButton && !g_mouseLClickButton) { // right button down?
-    m = Matrix4::makeTranslation(Cvec3(dx_translate, dy_trans, 0) * 0.01);
+      rigTForm = RigTForm(Cvec3(dx_translate, dy_trans, 0) * 0.01);
   }
   else if (g_mouseMClickButton || (g_mouseLClickButton && g_mouseRClickButton)) {  // middle or (left and right) button down?
-    m = Matrix4::makeTranslation(Cvec3(0, 0, -dy_trans) * 0.01);
+      rigTForm = RigTForm(Cvec3(0, 0, -dy_trans) * 0.01);
   }
 
   if (g_mouseClickDown) {
       if (g_curManipulatingObjIdx == 0) {
-          g_skyRbt = g_Frame * m * inv(g_Frame) * g_skyRbt;
+          g_skyRbt = g_Frame * rigTForm * inv(g_Frame) * g_skyRbt;
       } else {
-          g_objectRbt[g_curManipulatingObjIdx - 1] = g_Frame * m * inv(g_Frame) * g_objectRbt[g_curManipulatingObjIdx - 1];
+          g_objectRbt[g_curManipulatingObjIdx - 1] = g_Frame * rigTForm * inv(g_Frame) * g_objectRbt[g_curManipulatingObjIdx - 1];
       }
   }
 
