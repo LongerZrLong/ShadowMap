@@ -184,7 +184,7 @@ static shared_ptr<Geometry> g_ground, g_cube, g_cube2;
 static const int g_numObjects = 2;
 static const int g_numViews = g_numObjects + 1;     // plus 1 because of the sky
 
-static int g_curViewIdx = 0;
+static int g_curViewIdx = 0;    // 0: sky, 1: red cube, 2: blue cube
 
 static const Cvec3 g_light1(2.0, 3.0, 14.0), g_light2(-2, -3.0, -5.0);  // define two lights positions in world space
 
@@ -196,10 +196,14 @@ static Matrix4 g_objectRbt[g_numObjects] = {
 };
 static Cvec3f g_objectColors[] = {
         Cvec3f(1, 0, 0),
-        Cvec3f(0,0,1),
+        Cvec3f(0, 0, 1),
 };
 
+static Matrix4 g_Frame = linFact(g_skyRbt);    // default to world-sky frame
 
+static int g_curManipulatingObjIdx = 0;        // 0: sky, 1: red cube, 2: blue cube
+
+static int g_curSkyFrameIdx = 0;               // 0: world-sky frame, 1: sky-sky frame
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
 
@@ -332,26 +336,74 @@ static void reshape(const int w, const int h) {
   glutPostRedisplay();
 }
 
+static void setFrame() {
+    if (g_curManipulatingObjIdx == 0) { // manipulating sky
+        if (g_curViewIdx == 0) {    // view is sky
+            if (g_curSkyFrameIdx == 0) {
+                g_Frame = linFact(g_skyRbt);    // world-sky frame
+            } else {
+                g_Frame = g_skyRbt; // sky-sky frame
+            }
+        }
+    } else {    // manipulating cube
+        if (g_curViewIdx == 0) {    // view is sky
+            g_Frame = transFact(g_objectRbt[g_curManipulatingObjIdx - 1]) * linFact(g_skyRbt);
+        } else {    // view is cube
+            g_Frame = transFact(g_objectRbt[g_curManipulatingObjIdx - 1]) * linFact(g_objectRbt[g_curViewIdx - 1]);
+        }
+    }
+}
+
 static void motion(const int x, const int y) {
-  const double dx = x - g_mouseClickX;
-  const double dy = g_windowHeight - y - 1 - g_mouseClickY;
+  // Should not allow modifying the sky camera when the current camera view is a cube view.
+  if (g_curViewIdx != 0 && g_curManipulatingObjIdx == 0) return;
+
+  const double raw_dx = x - g_mouseClickX;
+  const double raw_dy = g_windowHeight - y - 1 - g_mouseClickY;
+
+  /* invert dx and/or dy depending on the situation */
+  double dx_translate, dx_rotate, dy_trans, dy_rotate;
+  if (g_curManipulatingObjIdx != 0 && g_curViewIdx != g_curManipulatingObjIdx) {
+      /* manipulating cube, and view not from that cube */
+      dx_translate = raw_dx;
+      dy_trans = raw_dy;
+      dx_rotate = raw_dx;
+      dy_rotate = raw_dy;
+  } else if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0 && g_curSkyFrameIdx == 0) {
+      /* manipulating sky camera, while eye is sky camera, and while in world-sky mode */
+      dx_translate = -raw_dx;
+      dy_trans = -raw_dy;
+      dx_rotate = -raw_dx;
+      dy_rotate = -raw_dy;
+  } else {
+      dx_translate = raw_dx;
+      dy_trans = raw_dy;
+      dx_rotate = -raw_dx;
+      dy_rotate = -raw_dy;
+  }
+
+  setFrame();
 
   Matrix4 m;
   if (g_mouseLClickButton && !g_mouseRClickButton) { // left button down?
-    m = Matrix4::makeXRotation(-dy) * Matrix4::makeYRotation(dx);
+    m = Matrix4::makeXRotation(-dy_rotate) * Matrix4::makeYRotation(dx_rotate);
   }
   else if (g_mouseRClickButton && !g_mouseLClickButton) { // right button down?
-    m = Matrix4::makeTranslation(Cvec3(dx, dy, 0) * 0.01);
+    m = Matrix4::makeTranslation(Cvec3(dx_translate, dy_trans, 0) * 0.01);
   }
   else if (g_mouseMClickButton || (g_mouseLClickButton && g_mouseRClickButton)) {  // middle or (left and right) button down?
-    m = Matrix4::makeTranslation(Cvec3(0, 0, -dy) * 0.01);
+    m = Matrix4::makeTranslation(Cvec3(0, 0, -dy_trans) * 0.01);
   }
 
   if (g_mouseClickDown) {
-    g_objectRbt[0] *= m; // Simply right-multiply is WRONG
-    g_objectRbt[1] *= m;
-    glutPostRedisplay(); // we always redraw if we changed the scene
+      if (g_curManipulatingObjIdx == 0) {
+          g_skyRbt = g_Frame * m * inv(g_Frame) * g_skyRbt;
+      } else {
+          g_objectRbt[g_curManipulatingObjIdx - 1] = g_Frame * m * inv(g_Frame) * g_objectRbt[g_curManipulatingObjIdx - 1];
+      }
   }
+
+  glutPostRedisplay(); // we always redraw if we changed the scene
 
   g_mouseClickX = x;
   g_mouseClickY = g_windowHeight - y - 1;
@@ -383,6 +435,29 @@ static void cycleView() {
     }
 }
 
+static void cycleManipulationMode() {
+    g_curManipulatingObjIdx = (g_curManipulatingObjIdx + 1) % g_numViews;
+
+    if (g_curManipulatingObjIdx == 0) {
+        cout << "Manipulating sky" << endl;
+    } else {
+        cout << "Manipulating object " << g_curManipulatingObjIdx << endl;
+    }
+}
+
+static void cycleSkyAMatrix() {
+    if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0) {
+        g_curSkyFrameIdx = (g_curSkyFrameIdx + 1) % 2;
+        if (g_curSkyFrameIdx == 0) {
+            cout << "Using world-sky frame" << endl;
+        } else {
+            cout << "Using sky-sky frame" << endl;
+        }
+    } else {
+        cout << "Unable to change sky manipulation mode while in current view." << endl;
+    }
+}
+
 static void keyboard(const unsigned char key, const int x, const int y) {
   switch (key) {
   case 27:
@@ -405,6 +480,12 @@ static void keyboard(const unsigned char key, const int x, const int y) {
     break;
   case 'v':
       cycleView();
+      break;
+  case 'o':
+      cycleManipulationMode();
+      break;
+  case 'm':
+      cycleSkyAMatrix();
       break;
   }
   glutPostRedisplay();
