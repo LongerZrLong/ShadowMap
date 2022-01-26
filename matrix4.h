@@ -278,11 +278,32 @@ inline Matrix4 normalMatrix(const Matrix4& m) {
 }
 
 inline Matrix4 transFact(const Matrix4& m) {
-  // TODO
+
+    Matrix4 ret;
+
+    // Extract the translation part of m into the return matrix.
+    for (int i = 0; i < 3; i++) {
+        ret(i,3) = m(i,3);
+    }
+
+    return ret;
 }
 
 inline Matrix4 linFact(const Matrix4& m) {
-  // TODO
+
+    Matrix4 ret(0.0);
+
+    // Extract the linear transformation part of m into the 3x3 part of the ret matrix
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            ret(i,j) = m(i,j);
+        }
+    }
+
+    // Set the bottom right corner of ret to 1
+    ret(3,3) = 1.0;
+
+    return ret;
 }
 
 #endif
