@@ -1,8 +1,8 @@
 #include <fstream>
-#include <vector>
-#include <string>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "glsupport.h"
 
@@ -13,14 +13,14 @@ void checkGlErrors() {
 
   if (errCode != GL_NO_ERROR) {
     string error("GL Error: ");
-    error += reinterpret_cast<const char*>(gluErrorString(errCode));
+    error += reinterpret_cast<const char *>(gluErrorString(errCode));
     cerr << error << endl;
     throw runtime_error(error);
   }
 }
 
 // Dump text file into a character vector, throws exception on error
-static void readTextFile(const char *fn, vector<char>& data) {
+static void readTextFile(const char *fn, vector<char> &data) {
   // Sets ios::binary bit to prevent end of line translation, so that the
   // number of bytes we read equals file size
   ifstream ifs(fn, ios::binary);
@@ -39,14 +39,15 @@ static void readTextFile(const char *fn, vector<char>& data) {
 }
 
 // Print info regarding an GL object
-static void printInfoLog(GLuint obj, const string& filename) {
+static void printInfoLog(GLuint obj, const string &filename) {
   GLint infologLength = 0;
-  GLint charsWritten  = 0;
+  GLint charsWritten = 0;
   glGetObjectParameterivARB(obj, GL_OBJECT_INFO_LOG_LENGTH_ARB, &infologLength);
   if (infologLength > 0) {
     string infoLog(infologLength, ' ');
     glGetInfoLogARB(obj, infologLength, &charsWritten, &infoLog[0]);
-    std::cerr << "##### Log [" << filename << "]:\n" << infoLog << endl;
+    std::cerr << "##### Log [" << filename << "]:\n"
+              << infoLog << endl;
   }
 }
 
@@ -56,7 +57,7 @@ void readAndCompileSingleShader(GLuint shaderHandle, const char *fn) {
 
   const char *ptrs[] = {&source[0]};
   const GLint lens[] = {source.size()};
-  glShaderSource(shaderHandle, 1, ptrs, lens);   // load the shader sources
+  glShaderSource(shaderHandle, 1, ptrs, lens);// load the shader sources
 
   glCompileShader(shaderHandle);
 
@@ -86,7 +87,7 @@ void linkShader(GLuint programHandle, GLuint vs, GLuint fs) {
 }
 
 
-void readAndCompileShader(GLuint programHandle, const char * vertexShaderFileName, const char * fragmentShaderFileName) {
+void readAndCompileShader(GLuint programHandle, const char *vertexShaderFileName, const char *fragmentShaderFileName) {
   GlShader vs(GL_VERTEX_SHADER);
   GlShader fs(GL_FRAGMENT_SHADER);
 

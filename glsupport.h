@@ -6,9 +6,9 @@
 
 #include <GL/glew.h>
 #ifdef __MAC__
-# include <GLUT/glut.h>
+#include <GLUT/glut.h>
 #else
-# include <GL/glut.h>
+#include <GL/glut.h>
 #endif
 
 // Check if there has been an error inside OpenGL and if yes, print the error and
@@ -25,28 +25,29 @@ void linkShader(GLuint programHandle, GLuint vertexShaderHandle, GLuint fragment
 
 // Reads and compiles a single shader (vertex, fragment, etc) file into a GL
 // shader. Throws runtime_error on error
-void readAndCompileSingleShader(GLuint shaderHandle, const char* shaderFileName);
+void readAndCompileSingleShader(GLuint shaderHandle, const char *shaderFileName);
 
 // Classes inheriting Noncopyable will not have default compiler generated copy
 // constructor and assignment operator
 class Noncopyable {
-protected:
+  protected:
   Noncopyable() {}
   ~Noncopyable() {}
-private:
-  Noncopyable(const Noncopyable&);
-  const Noncopyable& operator= (const Noncopyable&);
+
+  private:
+  Noncopyable(const Noncopyable &);
+  const Noncopyable &operator=(const Noncopyable &);
 };
 
 // Light wrapper around a GL shader (can be geometry/vertex/fragment shader)
 // handle. Automatically allocates and deallocates. Can be casted to GLuint.
 class GlShader : Noncopyable {
-protected:
+  protected:
   GLuint handle_;
 
-public:
+  public:
   GlShader(GLenum shaderType) {
-    handle_ = glCreateShader(shaderType); // create shader handle
+    handle_ = glCreateShader(shaderType);// create shader handle
     if (handle_ == 0)
       throw std::runtime_error("glCreateShader fails");
     checkGlErrors();
@@ -65,10 +66,10 @@ public:
 // Light wrapper around GLSL program handle that automatically allocates
 // and deallocates. Can be casted to a GLuint.
 class GlProgram : Noncopyable {
-protected:
+  protected:
   GLuint handle_;
 
-public:
+  public:
   GlProgram() {
     handle_ = glCreateProgram();
     if (handle_ == 0)
@@ -90,10 +91,10 @@ public:
 // Light wrapper around a GL texture object handle that automatically allocates
 // and deallocates. Can be casted to a GLuint.
 class GlTexture : Noncopyable {
-protected:
+  protected:
   GLuint handle_;
 
-public:
+  public:
   GlTexture() {
     glGenTextures(1, &handle_);
     checkGlErrors();
@@ -104,7 +105,7 @@ public:
   }
 
   // Casts to GLuint so can be used directly by glBindTexture and so on
-  operator GLuint () const {
+  operator GLuint() const {
     return handle_;
   }
 };
@@ -112,10 +113,10 @@ public:
 // Light wrapper around a GL buffer object handle that automatically allocates
 // and deallocates. Can be casted to a GLuint.
 class GlBufferObject : Noncopyable {
-protected:
+  protected:
   GLuint handle_;
 
-public:
+  public:
   GlBufferObject() {
     glGenBuffers(1, &handle_);
     checkGlErrors();
@@ -141,14 +142,16 @@ public:
 inline GLint safe_glGetUniformLocation(const GLuint program, const char varname[]) {
   GLint r = glGetUniformLocation(program, varname);
   if (r < 0)
-    std::cerr << "WARN: "<< varname << " cannot be bound (it either doesn't exist or has been optimized away). safe_glUniform calls will silently ignore it.\n" << std::endl;
+    std::cerr << "WARN: " << varname << " cannot be bound (it either doesn't exist or has been optimized away). safe_glUniform calls will silently ignore it.\n"
+              << std::endl;
   return r;
 }
 
 inline GLint safe_glGetAttribLocation(const GLuint program, const char varname[]) {
   GLint r = glGetAttribLocation(program, varname);
   if (r < 0)
-    std::cerr << "WARN: "<< varname << " cannot be bound (it either doesn't exist or has been optimized away). safe_glAttrib calls will silently ignore it.\n" << std::endl;
+    std::cerr << "WARN: " << varname << " cannot be bound (it either doesn't exist or has been optimized away). safe_glAttrib calls will silently ignore it.\n"
+              << std::endl;
   return r;
 }
 
