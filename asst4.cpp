@@ -25,6 +25,7 @@
 #include "matrix4.h"
 #include "ppm.h"
 #include "rigtform.h"
+#include "asstcommon.h"
 
 using namespace std;// for string, vector, iostream, and other standard C++ stuff
 
@@ -45,8 +46,7 @@ using namespace std;// for string, vector, iostream, and other standard C++ stuf
 // To complete the assignment you only need to edit the shader files that get
 // loaded
 // ----------------------------------------------------------------------------
-static const bool g_Gl2Compatible = true;
-
+const bool g_Gl2Compatible = true;
 
 static const float g_frustMinFov = 60.0; // A minimal of 60 degree field of view
 static float g_frustFovY = g_frustMinFov;// FOV in y direction (updated by updateFrustFovY)
@@ -62,43 +62,6 @@ static bool g_mouseClickDown = false;// is the mouse button pressed
 static bool g_mouseLClickButton, g_mouseRClickButton, g_mouseMClickButton;
 static int g_mouseClickX, g_mouseClickY;// coordinates for mouse click event
 static int g_activeShader = 0;
-
-struct ShaderState {
-  GlProgram program;
-
-  // Handles to uniform variables
-  GLint h_uLight, h_uLight2;
-  GLint h_uProjMatrix;
-  GLint h_uModelViewMatrix;
-  GLint h_uNormalMatrix;
-  GLint h_uColor;
-
-  // Handles to vertex attributes
-  GLint h_aPosition;
-  GLint h_aNormal;
-
-  ShaderState(const char *vsfn, const char *fsfn) {
-    readAndCompileShader(program, vsfn, fsfn);
-
-    const GLuint h = program;// short hand
-
-    // Retrieve handles to uniform variables
-    h_uLight = safe_glGetUniformLocation(h, "uLight");
-    h_uLight2 = safe_glGetUniformLocation(h, "uLight2");
-    h_uProjMatrix = safe_glGetUniformLocation(h, "uProjMatrix");
-    h_uModelViewMatrix = safe_glGetUniformLocation(h, "uModelViewMatrix");
-    h_uNormalMatrix = safe_glGetUniformLocation(h, "uNormalMatrix");
-    h_uColor = safe_glGetUniformLocation(h, "uColor");
-
-    // Retrieve handles to vertex attributes
-    h_aPosition = safe_glGetAttribLocation(h, "aPosition");
-    h_aNormal = safe_glGetAttribLocation(h, "aNormal");
-
-    if (!g_Gl2Compatible)
-      glBindFragDataLocation(h, 0, "fragColor");
-    checkGlErrors();
-  }
-};
 
 static const int g_numShaders = 2;
 static const char *const g_shaderFiles[g_numShaders][2] = {
@@ -269,16 +232,6 @@ static void sendProjectionMatrix(const ShaderState &curSS, const Matrix4 &projMa
   GLfloat glmatrix[16];
   projMatrix.writeToColumnMajorMatrix(glmatrix);// send projection matrix
   safe_glUniformMatrix4fv(curSS.h_uProjMatrix, glmatrix);
-}
-
-// takes MVM and its normal matrix to the shaders
-static void sendModelViewNormalMatrix(const ShaderState &curSS, const Matrix4 &MVM, const Matrix4 &NMVM) {
-  GLfloat glmatrix[16];
-  MVM.writeToColumnMajorMatrix(glmatrix);// send MVM
-  safe_glUniformMatrix4fv(curSS.h_uModelViewMatrix, glmatrix);
-
-  NMVM.writeToColumnMajorMatrix(glmatrix);// send NMVM
-  safe_glUniformMatrix4fv(curSS.h_uNormalMatrix, glmatrix);
 }
 
 // update g_frustFovY from g_frustMinFov, g_windowWidth, and g_windowHeight
@@ -576,7 +529,7 @@ static void initGlutState(int argc, char *argv[]) {
   glutInit(&argc, argv);                                    // initialize Glut based on cmd-line args
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);//  RGBA pixel channels and double buffering
   glutInitWindowSize(g_windowWidth, g_windowHeight);        // create a window
-  glutCreateWindow("Assignment 3");                         // title the window
+  glutCreateWindow("Assignment 4");                         // title the window
 
   glutDisplayFunc(display);// display rendering callback
   glutReshapeFunc(reshape);// window reshape callback
