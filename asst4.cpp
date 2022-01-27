@@ -67,6 +67,8 @@ static bool g_mouseLClickButton, g_mouseRClickButton, g_mouseMClickButton;
 static int g_mouseClickX, g_mouseClickY;// coordinates for mouse click event
 static int g_activeShader = 0;
 
+static bool g_isPicking;
+
 static const int PICKING_SHADER = 2; // index of the picking shader is g_shaderFiles
 static const int g_numShaders = 3;
 static const char *const g_shaderFiles[g_numShaders][2] = {
@@ -336,6 +338,30 @@ static void drawStuff(const ShaderState& curSS, bool picking) {
 
 }
 
+static void pick() {
+  // We need to set the clear color to black, for pick rendering.
+  // so let's save the clear color
+  GLdouble clearColor[4];
+  glGetDoublev(GL_COLOR_CLEAR_VALUE, clearColor);
+
+  glClearColor(0, 0, 0, 0);
+
+  // using PICKING_SHADER as the shader
+  glUseProgram(g_shaderStates[PICKING_SHADER]->program);
+
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  drawStuff(*g_shaderStates[PICKING_SHADER], true);
+
+  // Uncomment below and comment out the glutPostRedisplay in mouse(...) call back
+  // to see result of the pick rendering pass
+  // glutSwapBuffers();
+
+  //Now set back the clear color
+  glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+
+  checkGlErrors();
+}
+
 static void display() {
   glUseProgram(g_shaderStates[g_activeShader]->program);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);// clear framebuffer color&depth
@@ -445,6 +471,11 @@ static void mouse(const int button, const int state, const int x, const int y) {
 
   g_mouseClickDown = g_mouseLClickButton || g_mouseRClickButton || g_mouseMClickButton;
 
+  if (g_isPicking && g_mouseLClickButton && !g_mouseRClickButton) {
+    pick();
+    g_isPicking = false;
+  }
+
   // Add this to support the snap effect
   glutPostRedisplay();
 }
@@ -511,6 +542,9 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       break;
     case 'm':
       cycleSkyAMatrix();
+      break;
+    case 'p':
+      g_isPicking = true;
       break;
   }
   glutPostRedisplay();
