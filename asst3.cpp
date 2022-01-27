@@ -21,6 +21,7 @@
 #include "cvec.h"
 #include "matrix4.h"
 #include "rigtform.h"
+#include "arcball.h"
 #include "geometrymaker.h"
 #include "ppm.h"
 #include "glsupport.h"
@@ -179,7 +180,7 @@ struct Geometry {
 
 
 // Vertex buffer and index buffer associated with the ground and cube geometry
-static shared_ptr<Geometry> g_ground, g_cube, g_cube2;
+static shared_ptr<Geometry> g_ground, g_cube, g_cube2, g_arcball;
 
 // --------- Scene
 static const int g_numObjects = 2;
@@ -204,7 +205,23 @@ static RigTForm g_Frame = linFact(g_skyRbt);    // default to world-sky frame
 
 static int g_curManipulatingObjIdx = 0;        // 0: sky, 1: red cube, 2: blue cube
 
-static int g_curSkyFrameIdx = 0;               // 0: world-sky frame, 1: sky-sky frame
+enum SkyFrame : int {
+    World_Sky,
+    Sky_Sky,
+};
+
+static SkyFrame g_curSkyFrame = World_Sky;
+
+
+// arcball
+static const Cvec3f g_arcballColor = Cvec3f(1, 1, 1);
+static const int g_arcballSlices = 20;
+static const int g_arcballStacks = 20;
+
+static double g_arcballScreenRadiusFactor = 0.25;
+static double g_arcballScreenRadius = g_arcballScreenRadiusFactor * min(g_windowWidth, g_windowHeight);
+static double g_arcballScale;
+
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
 
@@ -241,6 +258,18 @@ static void initCubes() {
   g_cube2.reset(new Geometry(&vtx2[0], &idx2[0], vbLen, ibLen));
 }
 
+static void initArcball() {
+    int ibLen, vbLen;
+    getSphereVbIbLen(g_arcballSlices, g_arcballStacks, vbLen, ibLen);
+
+    // Temporary storage for arcball geometry
+    vector<VertexPN> vtx(vbLen);
+    vector<unsigned short> idx(ibLen);
+
+    makeSphere(1, g_arcballSlices, g_arcballStacks, vtx.begin(), idx.begin());
+    g_arcball.reset(new Geometry(&vtx[0], &idx[0], vbLen, ibLen));
+}
+
 // takes a projection matrix and send to the the shaders
 static void sendProjectionMatrix(const ShaderState& curSS, const Matrix4& projMatrix) {
   GLfloat glmatrix[16];
@@ -272,6 +301,17 @@ static Matrix4 makeProjectionMatrix() {
   return Matrix4::makeProjection(
            g_frustFovY, g_windowWidth / static_cast <double> (g_windowHeight),
            g_frustNear, g_frustFar);
+}
+
+static bool isUsingArcball() {
+    if (g_curManipulatingObjIdx == 0 && g_curSkyFrame == World_Sky) {
+        return true;
+    } else {
+        if (g_curManipulatingObjIdx != g_curViewIdx)
+            return true;
+        else
+            return false;
+    }
 }
 
 static void drawStuff() {
@@ -318,6 +358,38 @@ static void drawStuff() {
   sendModelViewNormalMatrix(curSS, MVM, NMVM);
   safe_glUniform3f(curSS.h_uColor, g_objectColors[1][0], g_objectColors[1][1], g_objectColors[1][2]);
   g_cube2->draw(curSS);
+
+  // draw arcball in wireframe mode
+  // ==========
+  if (!isUsingArcball())
+      return;
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+  // choose the correct rbt according to current manipulating object and current view
+  RigTForm tmpRbt;
+  if (g_curManipulatingObjIdx == 0) {   // manipulating sky
+      if (g_curSkyFrame == World_Sky) {
+          tmpRbt = RigTForm();
+      } else {
+          tmpRbt = eyeRbt;
+      }
+  } else {  // manipulating cubes
+      tmpRbt = g_objectRbt[g_curManipulatingObjIdx - 1];
+  }
+
+  MVRigTForm = invEyeRbt * tmpRbt;
+
+  // remember to scale correct the arcball
+  g_arcballScale = getScreenToEyeScale((invEyeRbt * tmpRbt).getTranslation()[2],g_frustFovY, g_windowHeight);
+  MVM = rigTFormToMatrix(MVRigTForm) * Matrix4::makeScale(g_arcballScale * g_arcballScreenRadius);
+
+  NMVM = normalMatrix(MVM);
+  sendModelViewNormalMatrix(curSS, MVM, NMVM);
+  safe_glUniform3f(curSS.h_uColor, g_arcballColor[0], g_arcballColor[1], g_arcballColor[2]);
+  g_arcball->draw(curSS);
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 static void display() {
@@ -336,6 +408,7 @@ static void reshape(const int w, const int h) {
   g_windowHeight = h;
   glViewport(0, 0, w, h);
   cerr << "Size of window is now " << w << "x" << h << endl;
+  g_arcballScreenRadius = g_arcballScreenRadiusFactor * min(g_windowWidth, g_windowHeight);
   updateFrustFovY();
   glutPostRedisplay();
 }
@@ -343,7 +416,7 @@ static void reshape(const int w, const int h) {
 static void setFrame() {
     if (g_curManipulatingObjIdx == 0) { // manipulating sky
         if (g_curViewIdx == 0) {    // view is sky
-            if (g_curSkyFrameIdx == 0) {
+            if (g_curSkyFrame == World_Sky) {
                 g_Frame = linFact(g_skyRbt);    // world-sky frame
             } else {
                 g_Frame = g_skyRbt; // sky-sky frame
@@ -373,7 +446,7 @@ static void motion(const int x, const int y) {
       dy_trans = raw_dy;
       dx_rotate = raw_dx;
       dy_rotate = raw_dy;
-  } else if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0 && g_curSkyFrameIdx == 0) {
+  } else if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0 && g_curSkyFrame == World_Sky) {
       /* manipulating sky camera, while eye is sky camera, and while in world-sky mode */
       dx_translate = -raw_dx;
       dy_trans = -raw_dy;
@@ -451,8 +524,8 @@ static void cycleManipulationMode() {
 
 static void cycleSkyAMatrix() {
     if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0) {
-        g_curSkyFrameIdx = (g_curSkyFrameIdx + 1) % 2;
-        if (g_curSkyFrameIdx == 0) {
+        g_curSkyFrame = static_cast<SkyFrame>((g_curSkyFrame + 1) % 2);     // toggle between World_Sky and Sky_Sky
+        if (g_curSkyFrame == World_Sky) {
             cout << "Using world-sky frame" << endl;
         } else {
             cout << "Using sky-sky frame" << endl;
@@ -499,7 +572,7 @@ static void initGlutState(int argc, char * argv[]) {
   glutInit(&argc, argv);                                  // initialize Glut based on cmd-line args
   glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_DEPTH);  //  RGBA pixel channels and double buffering
   glutInitWindowSize(g_windowWidth, g_windowHeight);      // create a window
-  glutCreateWindow("Assignment 2");                       // title the window
+  glutCreateWindow("Assignment 3");                       // title the window
 
   glutDisplayFunc(display);                               // display rendering callback
   glutReshapeFunc(reshape);                               // window reshape callback
@@ -535,6 +608,7 @@ static void initShaders() {
 static void initGeometry() {
   initGround();
   initCubes();
+  initArcball();
 }
 
 int main(int argc, char * argv[]) {
