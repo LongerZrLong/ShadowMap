@@ -380,10 +380,16 @@ static void drawStuff() {
 
   MVRigTForm = invEyeRbt * tmpRbt;
 
-  // remember to scale correct the arcball
-  g_arcballScale = getScreenToEyeScale((invEyeRbt * tmpRbt).getTranslation()[2],g_frustFovY, g_windowHeight);
-  MVM = rigTFormToMatrix(MVRigTForm) * Matrix4::makeScale(g_arcballScale * g_arcballScreenRadius);
+  // when we are not translating along z axis, update g_arcballScale
+  if (!g_mouseMClickButton && !(g_mouseLClickButton && g_mouseRClickButton)) {
+      g_arcballScale = getScreenToEyeScale(
+              (invEyeRbt * tmpRbt).getTranslation()[2],
+              g_frustFovY,
+              g_windowHeight);
+  }
 
+  // remember to scale correct the arcball
+  MVM = rigTFormToMatrix(MVRigTForm) * Matrix4::makeScale(g_arcballScale * g_arcballScreenRadius);
   NMVM = normalMatrix(MVM);
   sendModelViewNormalMatrix(curSS, MVM, NMVM);
   safe_glUniform3f(curSS.h_uColor, g_arcballColor[0], g_arcballColor[1], g_arcballColor[2]);
@@ -461,15 +467,17 @@ static void motion(const int x, const int y) {
 
   setFrame();
 
+  const double translateFactor = isUsingArcball()? g_arcballScale : 0.01;
+
   RigTForm rigTForm;
   if (g_mouseLClickButton && !g_mouseRClickButton) { // left button down?
       rigTForm = RigTForm(Quat::makeXRotation(-dy_rotate) * Quat::makeYRotation(dx_rotate));
   }
   else if (g_mouseRClickButton && !g_mouseLClickButton) { // right button down?
-      rigTForm = RigTForm(Cvec3(dx_translate, dy_trans, 0) * 0.01);
+      rigTForm = RigTForm(Cvec3(dx_translate, dy_trans, 0) * translateFactor);
   }
   else if (g_mouseMClickButton || (g_mouseLClickButton && g_mouseRClickButton)) {  // middle or (left and right) button down?
-      rigTForm = RigTForm(Cvec3(0, 0, -dy_trans) * 0.01);
+      rigTForm = RigTForm(Cvec3(0, 0, -dy_trans) * translateFactor);
   }
 
   if (g_mouseClickDown) {
@@ -500,6 +508,9 @@ static void mouse(const int button, const int state, const int x, const int y) {
   g_mouseMClickButton &= !(button == GLUT_MIDDLE_BUTTON && state == GLUT_UP);
 
   g_mouseClickDown = g_mouseLClickButton || g_mouseRClickButton || g_mouseMClickButton;
+
+  // Add this to support the snap effect
+  glutPostRedisplay();
 }
 
 static void cycleView() {
