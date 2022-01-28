@@ -67,7 +67,7 @@ static bool g_mouseLClickButton, g_mouseRClickButton, g_mouseMClickButton;
 static int g_mouseClickX, g_mouseClickY;// coordinates for mouse click event
 static int g_activeShader = 0;
 
-static bool g_isPicking;
+static bool g_isPicking = false;
 
 static const int PICKING_SHADER = 2; // index of the picking shader is g_shaderFiles
 static const int g_numShaders = 3;
@@ -148,36 +148,29 @@ struct Geometry {
 
 typedef SgGeometryShapeNode<Geometry> MyShapeNode;
 
-static shared_ptr<SgRootNode> g_world;
-static shared_ptr<SgRbtNode> g_skyNode, g_groundNode, g_robot1Node, g_robot2Node;
-static shared_ptr<SgRbtNode> g_currentPickedRbtNode;
-
-
 // Vertex buffer and index buffer associated with the ground, cube and arcball geometry
 static shared_ptr<Geometry> g_ground, g_cube, g_sphere;
 
 // --------- Scene
+static shared_ptr<SgRootNode> g_world;
+static shared_ptr<SgRbtNode> g_skyNode, g_groundNode, g_robot1Node, g_robot2Node;
+
 static const int g_numObjects = 2;
 static const int g_numViews = g_numObjects + 1;// plus 1 because of the sky
 
-static int g_curViewIdx = 0;// 0: sky, 1: red cube, 2: blue cube
+static int g_curViewIdx = 0;// 0: sky, 1: robot1, 2: robot2
+
+static shared_ptr<SgRbtNode> g_currentPickedRbtNode;
+static shared_ptr<SgRbtNode> g_currentViewRbtNode;
 
 static const Cvec3 g_light1(2.0, 3.0, 14.0), g_light2(-2, -3.0, -5.0);// define two lights positions in world space
 
-static RigTForm g_skyRbt = RigTForm(Cvec3(0.0, 0.25, 4.0));
-
-static RigTForm g_objectRbt[g_numObjects] = {
-        RigTForm(Cvec3(-1, 0, 0)),
-        RigTForm(Cvec3(1, 0, 0)),
-};
 static Cvec3f g_objectColors[] = {
         Cvec3f(1, 0, 0),
         Cvec3f(0, 0, 1),
 };
 
-static RigTForm g_Frame = linFact(g_skyRbt);// default to world-sky frame
-
-static int g_curManipulatingObjIdx = 0;// 0: sky, 1: red cube, 2: blue cube
+static RigTForm g_Frame;
 
 enum SkyFrame : int {
   World_Sky,
@@ -192,7 +185,7 @@ static const Cvec3f g_arcballColor = Cvec3f(1, 1, 1);
 static const int g_arcballSlices = 20;
 static const int g_arcballStacks = 20;
 
-static double g_arcballScreenRadiusFactor = 0.25;
+static double g_arcballScreenRadiusFactor = 0.2;
 static double g_arcballScreenRadius = g_arcballScreenRadiusFactor * min(g_windowWidth, g_windowHeight);
 static double g_arcballScale;
 
@@ -260,25 +253,81 @@ static Matrix4 makeProjectionMatrix() {
 }
 
 static bool isUsingArcball() {
-  if (g_curManipulatingObjIdx == 0 && g_curSkyFrame == World_Sky) {
+  if (*g_currentPickedRbtNode == *g_skyNode && g_curSkyFrame == World_Sky) {
     return true;
-  } else {
-    if (g_curManipulatingObjIdx != g_curViewIdx)
-      return true;
-    else
-      return false;
+  }
+
+  if (*g_currentPickedRbtNode != *g_skyNode && *g_currentViewRbtNode != *g_currentPickedRbtNode) {
+    return true;
+  }
+
+  return false;
+}
+
+static void setFrame() {
+  if (*g_currentPickedRbtNode == *g_skyNode) {// pick sky
+    if (*g_currentViewRbtNode == *g_skyNode) {// view is sky
+      if (g_curSkyFrame == World_Sky) {
+        g_Frame = linFact(g_skyNode->getRbt()); // world-sky frame
+      } else {
+        g_Frame = g_skyNode->getRbt();  // sky-sky frame
+      }
+    }
+  } else {// pick other
+    if (*g_currentViewRbtNode == *g_skyNode) {// view is sky
+      g_Frame = inv(getPathAccumRbt(g_world, g_currentPickedRbtNode, 1))
+                * transFact(getPathAccumRbt(g_world, g_currentPickedRbtNode))
+                * linFact(getPathAccumRbt(g_world, g_skyNode));
+      } else {// view is other
+        g_Frame = inv(getPathAccumRbt(g_world, g_currentPickedRbtNode, 1))
+                  * getPathAccumRbt(g_world, g_currentPickedRbtNode);
+      }
   }
 }
 
-static void drawStuff(const ShaderState& curSS, bool picking) {
+static void drawArcball(const ShaderState& curSS, const RigTForm &viewRbt) {
 
+  RigTForm MVRigTForm;
+  if (*g_currentPickedRbtNode == *g_skyNode) {  // pick sky
+    if (g_curSkyFrame == World_Sky) {
+      MVRigTForm = viewRbt;
+    } else {
+      MVRigTForm = RigTForm();
+    }
+  } else {  // pick other
+    MVRigTForm = viewRbt * getPathAccumRbt(g_world, g_currentPickedRbtNode);
+  }
+
+  if (MVRigTForm.getTranslation()[2] > g_frustNear) // if arcball's center is behind z near, don't draw it
+    return;
+
+  // when we are not translating along z axis, update g_arcballScale
+  if (!g_mouseMClickButton && !(g_mouseLClickButton && g_mouseRClickButton)) {
+    g_arcballScale = getScreenToEyeScale(
+            MVRigTForm.getTranslation()[2],
+            g_frustFovY,
+            g_windowHeight);
+  }
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+  // remember to scale correct the arcball
+  Matrix4 MVM = rigTFormToMatrix(MVRigTForm) * Matrix4::makeScale(g_arcballScale * g_arcballScreenRadius);
+  Matrix4 NMVM = normalMatrix(MVM);
+  sendModelViewNormalMatrix(curSS, MVM, NMVM);
+  safe_glUniform3f(curSS.h_uColor, g_arcballColor[0], g_arcballColor[1], g_arcballColor[2]);
+  g_sphere->draw(curSS);
+
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+static void drawStuff(const ShaderState& curSS, bool picking) {
   // build & send proj. matrix to vshader
   const Matrix4 projmat = makeProjectionMatrix();
   sendProjectionMatrix(curSS, projmat);
 
-  // choose the correct Rbt as eyeRbt
-  const RigTForm eyeRbt = (g_curViewIdx == 0) ? g_skyRbt : g_objectRbt[g_curViewIdx - 1];
-
+  // set eyeRbt
+  const RigTForm eyeRbt = getPathAccumRbt(g_world, g_currentViewRbtNode);
   const RigTForm invEyeRbt = inv(eyeRbt);
 
   const Cvec3 eyeLight1 = Cvec3(invEyeRbt * Cvec4(g_light1, 1));// g_light1 position in eye coordinates
@@ -286,54 +335,24 @@ static void drawStuff(const ShaderState& curSS, bool picking) {
   safe_glUniform3f(curSS.h_uLight, eyeLight1[0], eyeLight1[1], eyeLight1[2]);
   safe_glUniform3f(curSS.h_uLight2, eyeLight2[0], eyeLight2[1], eyeLight2[2]);
 
+  setFrame();
+
   if (!picking) {
     Drawer drawer(invEyeRbt, curSS);
     g_world->accept(drawer);
 
     // draw arcball in wireframe mode
     // ==========
-    if (!isUsingArcball())
-      return;
+    if (isUsingArcball())
+      drawArcball(curSS, invEyeRbt);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    // choose the correct rbt according to current manipulating object and current view
-    RigTForm tmpRbt;
-    if (g_curManipulatingObjIdx == 0) {// manipulating sky
-      if (g_curSkyFrame == World_Sky) {
-        tmpRbt = RigTForm();
-      } else {
-        tmpRbt = eyeRbt;
-      }
-    } else {// manipulating cubes
-      tmpRbt = g_objectRbt[g_curManipulatingObjIdx - 1];
-    }
-
-    RigTForm MVRigTForm = invEyeRbt * tmpRbt;
-
-    // when we are not translating along z axis, update g_arcballScale
-    if (!g_mouseMClickButton && !(g_mouseLClickButton && g_mouseRClickButton)) {
-      g_arcballScale = getScreenToEyeScale(
-              (invEyeRbt * tmpRbt).getTranslation()[2],
-              g_frustFovY,
-              g_windowHeight);
-    }
-
-    // remember to scale correct the arcball
-    Matrix4 MVM = rigTFormToMatrix(MVRigTForm) * Matrix4::makeScale(g_arcballScale * g_arcballScreenRadius);
-    Matrix4 NMVM = normalMatrix(MVM);
-    sendModelViewNormalMatrix(curSS, MVM, NMVM);
-    safe_glUniform3f(curSS.h_uColor, g_arcballColor[0], g_arcballColor[1], g_arcballColor[2]);
-    g_sphere->draw(curSS);
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
   } else {
     Picker picker(invEyeRbt, curSS);
     g_world->accept(picker);
     glFlush();
     g_currentPickedRbtNode = picker.getRbtNodeAtXY(g_mouseClickX, g_mouseClickY);
-    if (g_currentPickedRbtNode == g_groundNode)
-      g_currentPickedRbtNode = shared_ptr<SgRbtNode>();// set to NULL
+    if (*g_currentPickedRbtNode == *g_groundNode || g_currentPickedRbtNode == nullptr)
+      g_currentPickedRbtNode = g_skyNode;
   }
 
 }
@@ -383,40 +402,22 @@ static void reshape(const int w, const int h) {
   glutPostRedisplay();
 }
 
-static void setFrame() {
-  if (g_curManipulatingObjIdx == 0) {// manipulating sky
-    if (g_curViewIdx == 0) {         // view is sky
-      if (g_curSkyFrame == World_Sky) {
-        g_Frame = linFact(g_skyRbt);// world-sky frame
-      } else {
-        g_Frame = g_skyRbt;// sky-sky frame
-      }
-    }
-  } else {                  // manipulating cube
-    if (g_curViewIdx == 0) {// view is sky
-      g_Frame = transFact(g_objectRbt[g_curManipulatingObjIdx - 1]) * linFact(g_skyRbt);
-    } else {// view is cube
-      g_Frame = transFact(g_objectRbt[g_curManipulatingObjIdx - 1]) * linFact(g_objectRbt[g_curViewIdx - 1]);
-    }
-  }
-}
-
 static void motion(const int x, const int y) {
-  // Should not allow modifying the sky camera when the current camera view is a cube view.
-  if (g_curViewIdx != 0 && g_curManipulatingObjIdx == 0) return;
+  // Should not allow modifying the sky camera when the current camera view is not the sky view.
+  if (*g_currentPickedRbtNode == *g_skyNode && *g_currentViewRbtNode != *g_skyNode) return;
 
   const double raw_dx = x - g_mouseClickX;
   const double raw_dy = g_windowHeight - y - 1 - g_mouseClickY;
 
   /* invert dx and/or dy depending on the situation */
   double dx_translate, dx_rotate, dy_trans, dy_rotate;
-  if (g_curManipulatingObjIdx != 0 && g_curViewIdx != g_curManipulatingObjIdx) {
+  if (*g_currentPickedRbtNode != *g_skyNode && *g_currentViewRbtNode != *g_currentPickedRbtNode) {
     /* manipulating cube, and view not from that cube */
     dx_translate = raw_dx;
     dy_trans = raw_dy;
     dx_rotate = raw_dx;
     dy_rotate = raw_dy;
-  } else if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0 && g_curSkyFrame == World_Sky) {
+  } else if (*g_currentPickedRbtNode == *g_skyNode && *g_currentViewRbtNode == *g_skyNode && g_curSkyFrame == World_Sky) {
     /* manipulating sky camera, while eye is sky camera, and while in world-sky mode */
     dx_translate = -raw_dx;
     dy_trans = -raw_dy;
@@ -429,8 +430,6 @@ static void motion(const int x, const int y) {
     dy_rotate = -raw_dy;
   }
 
-  setFrame();
-
   const double translateFactor = isUsingArcball() ? g_arcballScale : 0.01;
 
   RigTForm rigTForm;
@@ -442,12 +441,10 @@ static void motion(const int x, const int y) {
     rigTForm = RigTForm(Cvec3(0, 0, -dy_trans) * translateFactor);
   }
 
+  setFrame();
+
   if (g_mouseClickDown) {
-    if (g_curManipulatingObjIdx == 0) {
-      g_skyRbt = g_Frame * rigTForm * inv(g_Frame) * g_skyRbt;
-    } else {
-      g_objectRbt[g_curManipulatingObjIdx - 1] = g_Frame * rigTForm * inv(g_Frame) * g_objectRbt[g_curManipulatingObjIdx - 1];
-    }
+    g_currentPickedRbtNode->setRbt(g_Frame * rigTForm * inv(g_Frame) * g_currentPickedRbtNode->getRbt());
   }
 
   glutPostRedisplay();// we always redraw if we changed the scene
@@ -483,25 +480,27 @@ static void mouse(const int button, const int state, const int x, const int y) {
 static void cycleView() {
   g_curViewIdx = (g_curViewIdx + 1) % g_numViews;
 
-  if (g_curViewIdx == 0) {
-    cout << "View from sky" << endl;
-  } else {
-    cout << "View from object " << g_curViewIdx << endl;
-  }
-}
-
-static void cycleManipulationMode() {
-  g_curManipulatingObjIdx = (g_curManipulatingObjIdx + 1) % g_numViews;
-
-  if (g_curManipulatingObjIdx == 0) {
-    cout << "Manipulating sky" << endl;
-  } else {
-    cout << "Manipulating object " << g_curManipulatingObjIdx << endl;
+  switch (g_curViewIdx) {
+    case 0: {
+      cout << "View from sky" << endl;
+      g_currentViewRbtNode = g_skyNode;
+      break;
+    }
+    case 1: {
+      cout << "View from robot 1" << endl;
+      g_currentViewRbtNode = g_robot1Node;
+      break;
+    }
+    case 2: {
+      cout << "View from robot 2" << endl;
+      g_currentViewRbtNode = g_robot2Node;
+      break;
+    }
   }
 }
 
 static void cycleSkyAMatrix() {
-  if (g_curManipulatingObjIdx == 0 && g_curViewIdx == 0) {
+  if (*g_currentPickedRbtNode == *g_skyNode && *g_currentViewRbtNode == *g_skyNode) {
     g_curSkyFrame = static_cast<SkyFrame>((g_curSkyFrame + 1) % 2);// toggle between World_Sky and Sky_Sky
     if (g_curSkyFrame == World_Sky) {
       cout << "Using world-sky frame" << endl;
@@ -536,9 +535,6 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       break;
     case 'v':
       cycleView();
-      break;
-    case 'o':
-      cycleManipulationMode();
       break;
     case 'm':
       cycleSkyAMatrix();
@@ -666,6 +662,10 @@ static void initScene() {
   g_world->addChild(g_groundNode);
   g_world->addChild(g_robot1Node);
   g_world->addChild(g_robot2Node);
+
+  // initialize current current picked and current view
+  g_currentPickedRbtNode = g_skyNode;
+  g_currentViewRbtNode = g_skyNode;
 }
 
 int main(int argc, char *argv[]) {

@@ -24,7 +24,7 @@ bool Picker::visit(SgShapeNode& node) {
 
   shared_ptr<SgRbtNode> ptr;
   for (auto it = nodeStack_.rbegin(); it != nodeStack_.rend(); it++) {
-    if (!(ptr = dynamic_pointer_cast<SgRbtNode>(*it))) break;
+    if ((ptr = dynamic_pointer_cast<SgRbtNode>(*it)) != nullptr) break;
   }
 
   addToMap(idCounter_, ptr);
