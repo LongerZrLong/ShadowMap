@@ -203,6 +203,11 @@ static double g_arcballScale;
 // script
 static Script g_script;
 
+static int g_msBetweenKeyFrames = 2000; // 2 seconds between keyframes
+static int g_animateFramesPerSecond = 60; // frames to render per second during animation playback
+
+static bool g_isPlaying = false;
+
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
 
@@ -526,6 +531,57 @@ static void cycleSkyAMatrix() {
   }
 }
 
+// Given t in the range [0, n], perform interpolation and draw the scene
+// for the particular t. Returns true if we are at the end of the animation
+// sequence, or false otherwise.
+bool interpolateAndDisplay(float t) {
+  static int lastFrameIdx = 0;
+  int curFrameIdx = floor(t);
+
+  if (curFrameIdx != lastFrameIdx) {
+    g_script.advanceCurFrame();
+    lastFrameIdx = curFrameIdx;
+  }
+
+  if (lastFrameIdx == g_script.getFrameCount() - 1) {
+    lastFrameIdx = 0;
+    return true;
+  }
+
+  const float alpha = t - floor(t);
+  g_script.restoreInterpolate(alpha);
+  glutPostRedisplay();
+
+  return false;
+}
+
+// Interpret "ms" as milliseconds into the animation
+static void animateTimerCallback(int ms) {
+  float t = (float)ms/(float)g_msBetweenKeyFrames;
+  bool endReached = interpolateAndDisplay(t);
+  if (!endReached && g_isPlaying)
+    glutTimerFunc(1000/g_animateFramesPerSecond,
+                  animateTimerCallback,
+                  ms + 1000/g_animateFramesPerSecond);
+  else {
+    g_isPlaying = false;
+  }
+}
+
+static void toggleAnimation() {
+  if (!g_isPlaying) {
+    if (g_script.getFrameCount() < 4) {
+      cerr << "[Warning] Need at least 4 keyframes, but got " << g_script.getFrameCount() << endl;
+      return;
+    }
+    g_isPlaying = true;
+    g_script.reset();
+    animateTimerCallback(0);
+  } else {
+    g_isPlaying = false;
+  }
+}
+
 static void keyboard(const unsigned char key, const int x, const int y) {
   switch (key) {
     case Key::Esc:
@@ -582,6 +638,17 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       break;
     case 'w':
       g_script.save(SCRIPT_PATH);
+      break;
+    case 'y':
+      toggleAnimation();
+      break;
+    case '+':
+      g_msBetweenKeyFrames = max(500, g_msBetweenKeyFrames - 100);
+      cout << "+: " << g_msBetweenKeyFrames << endl;
+      break;
+    case '-':
+      g_msBetweenKeyFrames = min(5000, g_msBetweenKeyFrames + 100);
+      cout << "-: " << g_msBetweenKeyFrames << endl;
       break;
   }
   glutPostRedisplay();

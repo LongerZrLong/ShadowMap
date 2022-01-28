@@ -24,6 +24,11 @@ class Script {
       void save(const string &path);
       void load(const string &path);
 
+      size_t getFrameCount() { return frames_.size(); }
+
+      void reset();
+      void restoreInterpolate(double alpha);
+
   public:
       friend ostream &operator<<(ostream &out, const Script &script);
 
@@ -32,8 +37,6 @@ class Script {
       list<Frame>::iterator iter_;
 
       shared_ptr<SgNode> sgRoot_;
-
-      int queryCurFrameIdx() const;
 
 };
 

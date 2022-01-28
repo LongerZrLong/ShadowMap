@@ -78,8 +78,9 @@ void Script::createNewFrame() {
   if (iter_ != frames_.end()) {
     auto tmp = iter_;
     tmp++;
-
     frames_.insert(tmp, frame);
+
+    iter_++;
   } else {
     // iter points to frames_.end()
     frames_.insert(iter_, frame);
@@ -125,12 +126,20 @@ void Script::load(const string &path) {
   }
 }
 
-int Script::queryCurFrameIdx() const {
-  int index = 0;
-  for (auto it = frames_.begin(); it != iter_; it++) {
-    index++;
+void Script::reset() {
+  iter_ = frames_.begin();
+  if (iter_ != frames_.end()) {
+    iter_->restore();
   }
-  return index;
+}
+
+void Script::restoreInterpolate(double alpha) {
+  auto tmp = iter_;
+  Frame first = *tmp;
+  tmp++;
+  Frame second = *tmp;
+
+  ::interpolate(first, second, alpha).restore();
 }
 
 ostream &operator<<(ostream &out, const Script &script) {
