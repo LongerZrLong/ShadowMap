@@ -31,6 +31,9 @@
 #include "drawer.h"
 #include "picker.h"
 
+#include "frame.h"
+#include "script.h"
+
 using namespace std;// for string, vector, iostream, and other standard C++ stuff
 
 // G L O B A L S ///////////////////////////////////////////////////
@@ -51,6 +54,13 @@ using namespace std;// for string, vector, iostream, and other standard C++ stuf
 // loaded
 // ----------------------------------------------------------------------------
 const bool g_Gl2Compatible = true;
+
+static const string SCRIPT_PATH = "./script.txt" ;
+
+enum Key : int {
+  Esc = 27,
+  Space = 32,
+};
 
 static const float g_frustMinFov = 60.0; // A minimal of 60 degree field of view
 static float g_frustFovY = g_frustMinFov;// FOV in y direction (updated by updateFrustFovY)
@@ -188,6 +198,10 @@ static const int g_arcballStacks = 20;
 static double g_arcballScreenRadiusFactor = 0.2;
 static double g_arcballScreenRadius = g_arcballScreenRadiusFactor * min(g_windowWidth, g_windowHeight);
 static double g_arcballScale;
+
+
+// script
+static Script g_script;
 
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
@@ -514,7 +528,7 @@ static void cycleSkyAMatrix() {
 
 static void keyboard(const unsigned char key, const int x, const int y) {
   switch (key) {
-    case 27:
+    case Key::Esc:
       exit(0);// ESC
     case 'h':
       cout << " ============== H E L P ==============\n\n"
@@ -541,6 +555,33 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       break;
     case 'p':
       g_isPicking = true;
+      break;
+    case Key::Space:
+      g_script.restoreCurFrame();
+      break;
+    case 'u':
+      g_script.overwriteCurFrame();
+      break;
+    case '>':
+      g_script.advanceCurFrame();
+      break;
+    case '<':
+      g_script.retreatCurFrame();
+      break;
+    case 'd':
+      g_script.deleteCurFrame();
+      break;
+    case 'n':
+      g_script.createNewFrame();
+      break;
+    case 'q':
+      cout << g_script << endl;
+      break;
+    case 'i':
+      g_script.load(SCRIPT_PATH);
+      break;
+    case 'w':
+      g_script.save(SCRIPT_PATH);
       break;
   }
   glutPostRedisplay();
@@ -693,6 +734,10 @@ static void initScene() {
   g_currentViewRbtNode = g_skyNode;
 }
 
+static void initScript() {
+  g_script.initialize(g_world);
+}
+
 int main(int argc, char *argv[]) {
   try {
     initGlutState(argc, argv);
@@ -709,6 +754,7 @@ int main(int argc, char *argv[]) {
     initShaders();
     initGeometry();
     initScene();
+    initScript();
 
     glutMainLoop();
     return 0;

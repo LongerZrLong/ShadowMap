@@ -49,6 +49,13 @@ class RigTForm {
             t_ + Cvec3(r_ * Cvec4(a.getTranslation(), 0)),
             r_ * a.getRotation());
   }
+
+  friend std::ostream &operator<<(std::ostream &out, const RigTForm &rigTForm) {
+    out << rigTForm.t_[0] << "," << rigTForm.t_[1] << "," << rigTForm.t_[2] << ","
+        << rigTForm.r_[0] << "," << rigTForm.r_[1] << "," << rigTForm.r_[2] << "," << rigTForm.r_[3] << ";";
+
+    return out;
+  };
 };
 
 inline RigTForm inv(const RigTForm &tform) {
