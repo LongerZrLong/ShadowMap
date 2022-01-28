@@ -158,6 +158,11 @@ inline Cvec<T, n> normalize(const Cvec<T, n> &v) {
   return v / norm(v);
 }
 
+template<typename T, int n>
+inline Cvec<T, n> lerp(const Cvec<T, n> &first, const Cvec<T, n> &second, T alpha) {
+  return first * alpha + second * (1 - alpha);
+}
+
 // element of type double precision float
 typedef Cvec<double, 2> Cvec2;
 typedef Cvec<double, 3> Cvec3;

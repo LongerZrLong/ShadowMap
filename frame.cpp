@@ -60,3 +60,26 @@ vector<RigTForm> Frame::parse(const string &serialized) {
 
   return ret;
 }
+
+Frame interpolate(const Frame &first, const Frame &second, double alpha) {
+  assert(first.frameRbts_.size() == second.frameRbts_.size());
+  assert(first.nodePtrs_.size() == second.nodePtrs_.size());
+
+  Frame ret;
+
+  for (int i = 0; i < first.frameRbts_.size(); i++) {
+    const RigTForm &firstRbt = first.frameRbts_[i];
+    const RigTForm &secondRbt = second.frameRbts_[i];
+
+    ret.frameRbts_.push_back(
+            RigTForm(
+            lerp(firstRbt.getTranslation(), secondRbt.getTranslation(), alpha),
+            slerp(firstRbt.getRotation(), secondRbt.getRotation(), alpha))
+            );
+
+    assert(*first.nodePtrs_[i] == *second.nodePtrs_[i]);
+    ret.nodePtrs_.push_back(first.nodePtrs_[i]);
+  }
+
+  return ret;
+}

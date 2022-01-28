@@ -60,6 +60,12 @@ class Quat {
     return *this;
   }
 
+  bool operator==(const Quat &a) const {
+    if (q_[0] == a[0] && q_[1] == a[1] && q_[2] == a[2] && q_[3] == a[3])
+      return true;
+    return false;
+  }
+
   Quat operator+(const Quat &a) const {
     return Quat(*this) += a;
   }
@@ -131,6 +137,52 @@ inline Quat inv(const Quat &q) {
 
 inline Quat normalize(const Quat &q) {
   return q / std::sqrt(norm2(q));
+}
+
+inline Quat pow(const Quat &quat, double alpha) {
+  /* First extract the unit axis k-hat by normalizing the last three entries
+       of the quaternion. */
+  Cvec3 kHat = Cvec3(quat[1], quat[2], quat[3]).normalize();
+
+  /* This gives us
+        /       w      \
+        \ Beta * k-hat /
+       with w^2 + Beta^2 = 1 (on unit circle). */
+  double w = quat[0];
+
+  /* Compute Beta */
+  double Beta;
+  if (kHat[0] != 0)
+    Beta = quat[1] / kHat[0];
+  else if (kHat[1] != 0)
+    Beta = quat[2] / kHat[1];
+  else
+    Beta = quat[3] / kHat[2];
+
+  /* Next extract phi using atan2.
+       atan2(Beta, w) returns a unique phi in [-pi, pi] s.t. sin(phi) = Beta and
+       cos(phi) = w. */
+  double phi = atan2(Beta, w);
+
+  /* To be clear, the original quaternion can now be expressed with:
+        /    cos(phi)   \
+        \ sin(phi)*kHat / */
+  /* Power operation is defined as:
+       /    cos(phi)   \^alpha    /    cos(alpha * phi)   \
+       \ sin(phi)*kHat /        = \ sin(alpha * phi)*kHat / */
+  return Quat(cos(alpha * phi), kHat * sin(alpha * phi));
+}
+
+inline Quat cn(const Quat &q) {
+  if (q[0] < 0)
+    return q * -1;
+  return q;
+}
+
+inline Quat slerp(const Quat &first, const Quat &second, double alpha) {
+  if (first == second) return first;
+
+  return pow(cn(second * inv(first)), alpha) * first;
 }
 
 inline Matrix4 quatToMatrix(const Quat &q) {
