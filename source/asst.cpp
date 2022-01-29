@@ -101,7 +101,9 @@ static shared_ptr<Geometry> g_ground, g_cube, g_sphere;
 
 // --------- Scene
 static shared_ptr<SgRootNode> g_world;
-static shared_ptr<SgRbtNode> g_skyNode, g_groundNode, g_robot1Node, g_robot2Node;
+static shared_ptr<SgRbtNode> g_skyNode, g_groundNode;
+static shared_ptr<SgRbtNode> g_light1Node, g_light2Node;
+static shared_ptr<SgRbtNode> g_robot1Node, g_robot2Node;
 
 static const int g_numObjects = 2;
 static const int g_numViews = g_numObjects + 1;// plus 1 because of the sky
@@ -110,13 +112,6 @@ static int g_curViewIdx = 0;// 0: sky, 1: robot1, 2: robot2
 
 static shared_ptr<SgRbtNode> g_currentPickedRbtNode;
 static shared_ptr<SgRbtNode> g_currentViewRbtNode;
-
-static const Cvec3 g_light1(2.0, 3.0, 14.0), g_light2(-2, -3.0, -5.0);// define two lights positions in world space
-
-static Cvec3f g_objectColors[] = {
-        Cvec3f(1, 0, 0),
-        Cvec3f(0, 0, 1),
-};
 
 static RigTForm g_Frame;
 
@@ -281,8 +276,8 @@ static void drawStuff(bool picking) {
   const RigTForm eyeRbt = getPathAccumRbt(g_world, g_currentViewRbtNode);
   const RigTForm invEyeRbt = inv(eyeRbt);
 
-  const Cvec3 eyeLight1 = Cvec3(invEyeRbt * Cvec4(g_light1, 1));// g_light1 position in eye coordinates
-  const Cvec3 eyeLight2 = Cvec3(invEyeRbt * Cvec4(g_light2, 1));// g_light2 position in eye coordinates
+  const Cvec3 eyeLight1 = Cvec3(invEyeRbt * Cvec4(getPathAccumRbt(g_world, g_light1Node).getTranslation(), 1));
+  const Cvec3 eyeLight2 = Cvec3(invEyeRbt * Cvec4(getPathAccumRbt(g_world, g_light2Node).getTranslation(), 1));
 
   // send the eye space coordinates of lights to uniforms
   uniforms.put("uLight", eyeLight1);
@@ -584,11 +579,11 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       break;
     case '+':
       g_msBetweenKeyFrames = max(500, g_msBetweenKeyFrames - 100);
-      cout << "+: " << g_msBetweenKeyFrames << endl;
+      cout << "ms between key frames: " << g_msBetweenKeyFrames << endl;
       break;
     case '-':
       g_msBetweenKeyFrames = min(5000, g_msBetweenKeyFrames + 100);
-      cout << "-: " << g_msBetweenKeyFrames << endl;
+      cout << "ms between key frames: " << g_msBetweenKeyFrames << endl;
       break;
   }
   glutPostRedisplay();
@@ -747,6 +742,22 @@ static void initScene() {
   g_groundNode->addChild(shared_ptr<MyShapeNode>(
           new MyShapeNode(g_ground, g_bumpFloorMat, Cvec3(0, g_groundY, 0))));
 
+  g_light1Node.reset(new SgRbtNode(RigTForm(Cvec3(2.0, 3.0, 14.0))));
+  g_light1Node->addChild(shared_ptr<MyShapeNode>(
+          new MyShapeNode(g_sphere, g_lightMat,
+                          Cvec3(0,0,0),
+                          Cvec3(0,0,0),
+                          Cvec3(0.5, 0.5, 0.5))
+          ));
+
+  g_light2Node.reset(new SgRbtNode(RigTForm(Cvec3(-2, -3.0, -5.0))));
+  g_light2Node->addChild(shared_ptr<MyShapeNode>(
+          new MyShapeNode(g_sphere, g_lightMat,
+                          Cvec3(0,0,0),
+                          Cvec3(0,0,0),
+                          Cvec3(0.5, 0.5, 0.5))
+          ));
+
   g_robot1Node.reset(new SgRbtNode(RigTForm(Cvec3(-2, 1, 0))));
   g_robot2Node.reset(new SgRbtNode(RigTForm(Cvec3(2, 1, 0))));
 
@@ -755,6 +766,8 @@ static void initScene() {
 
   g_world->addChild(g_skyNode);
   g_world->addChild(g_groundNode);
+  g_world->addChild(g_light1Node);
+  g_world->addChild(g_light2Node);
   g_world->addChild(g_robot1Node);
   g_world->addChild(g_robot2Node);
 
