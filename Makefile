@@ -1,4 +1,4 @@
-BASE = asst5
+BASE = asst
 
 all: $(BASE)
 
@@ -25,10 +25,22 @@ endif
 
 CXX = g++ 
 
-OBJ = $(BASE).o ppm.o glsupport.o scenegraph.o picker.o script.o frame.o
+SRC_DIR := source
+INC_DIR := include
+OBJ_DIR := bin-int
 
-$(BASE): $(OBJ)
-	$(LINK.cpp) -o $@ $^ $(LIBS) -lGLEW 
+SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
+OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES))
+
+$(BASE): $(OBJ_FILES)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS) -lGLEW
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(OBJ_DIR) $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@ -I$(INC_DIR)
+
+$(OBJ_DIR) $(BIN_DIR):
+	mkdir $@
 
 clean:
-	rm -f $(OBJ) $(BASE)
+	rm -f $(BASE)
+	rm -rf $(OBJ_DIR)

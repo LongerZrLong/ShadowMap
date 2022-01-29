@@ -8,7 +8,6 @@
 
 #include <memory>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 #include <GL/glew.h>
@@ -31,7 +30,6 @@
 #include "drawer.h"
 #include "picker.h"
 
-#include "frame.h"
 #include "script.h"
 
 using namespace std;// for string, vector, iostream, and other standard C++ stuff
@@ -55,7 +53,7 @@ using namespace std;// for string, vector, iostream, and other standard C++ stuf
 // ----------------------------------------------------------------------------
 const bool g_Gl2Compatible = true;
 
-static const string SCRIPT_PATH = "./script.txt" ;
+static const string SCRIPT_PATH = "./resource/script.txt" ;
 
 enum Key : int {
   Esc = 27,
@@ -634,7 +632,11 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       cout << g_script << endl;
       break;
     case 'i':
-      g_script.load(SCRIPT_PATH);
+      if (g_isPlaying) {
+        cerr << "Unable to load script because current script is playing" << endl;
+      } else {
+        g_script.load(SCRIPT_PATH);
+      }
       break;
     case 'w':
       g_script.save(SCRIPT_PATH);
@@ -658,7 +660,7 @@ static void initGlutState(int argc, char *argv[]) {
   glutInit(&argc, argv);                                    // initialize Glut based on cmd-line args
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);//  RGBA pixel channels and double buffering
   glutInitWindowSize(g_windowWidth, g_windowHeight);        // create a window
-  glutCreateWindow("Assignment 5");                         // title the window
+  glutCreateWindow("Assignment");                         // title the window
 
   glutDisplayFunc(display);// display rendering callback
   glutReshapeFunc(reshape);// window reshape callback
