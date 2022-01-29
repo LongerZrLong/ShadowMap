@@ -3,17 +3,18 @@
 
 #include <vector>
 
+#include "uniforms.h"
 #include "scenegraph.h"
 #include "asstcommon.h"
 
 class Drawer : public SgNodeVisitor {
 protected:
   std::vector<RigTForm> rbtStack_;
-  const ShaderState& curSS_;
+  Uniforms& uniforms_;
 public:
-  Drawer(const RigTForm& initialRbt, const ShaderState& curSS)
+  Drawer(const RigTForm& initialRbt, Uniforms& uniforms)
     : rbtStack_(1, initialRbt)
-    , curSS_(curSS) {}
+    , uniforms_(uniforms) {}
 
   virtual bool visit(SgTransformNode& node) {
     rbtStack_.push_back(rbtStack_.back() * node.getRbt());
@@ -27,8 +28,8 @@ public:
 
   virtual bool visit(SgShapeNode& shapeNode) {
     const Matrix4 MVM = rigTFormToMatrix(rbtStack_.back()) * shapeNode.getAffineMatrix();
-    sendModelViewNormalMatrix(curSS_, MVM, normalMatrix(MVM));
-    shapeNode.draw(curSS_);
+    sendModelViewNormalMatrix(uniforms_, MVM, normalMatrix(MVM));
+    shapeNode.draw(uniforms_);
     return true;
   }
 
@@ -36,8 +37,8 @@ public:
     return true;
   }
 
-  const ShaderState& getCurSS() const {
-    return curSS_;
+  Uniforms& getUniforms() {
+    return uniforms_;
   }
 };
 

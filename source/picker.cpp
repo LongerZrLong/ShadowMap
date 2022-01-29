@@ -1,11 +1,12 @@
 #include <GL/glew.h>
 
+#include "uniforms.h"
 #include "picker.h"
 
 using namespace std;
 
-Picker::Picker(const RigTForm& initialRbt, const ShaderState& curSS)
-  : drawer_(initialRbt, curSS)
+Picker::Picker(const RigTForm& initialRbt, Uniforms& uniforms)
+  : drawer_(initialRbt, uniforms)
   , idCounter_(0)
   , srgbFrameBuffer_(!g_Gl2Compatible) {}
 
@@ -20,18 +21,20 @@ bool Picker::postVisit(SgTransformNode& node) {
 }
 
 bool Picker::visit(SgShapeNode& node) {
-  idCounter_++;   // increment first because we don't use id = 0;
-
-  shared_ptr<SgRbtNode> ptr;
-  for (auto it = nodeStack_.rbegin(); it != nodeStack_.rend(); it++) {
-    if ((ptr = dynamic_pointer_cast<SgRbtNode>(*it)) != nullptr) break;
+  idCounter_++;
+  for (int i = nodeStack_.size() - 1; i >= 0; --i) {
+    shared_ptr<SgRbtNode> asRbtNode = dynamic_pointer_cast<SgRbtNode>(nodeStack_[i]);
+    if (asRbtNode) {
+      addToMap(idCounter_, asRbtNode);
+      break;
+    }
   }
+  const Cvec3 idColor = idToColor(idCounter_);
 
-  addToMap(idCounter_, ptr);
+  // DEBUG OUTPUT
+  // cerr << idCounter_ << " => " << idColor[0] << ' ' << idColor[1] << ' ' << idColor[2] << endl;
 
-  const Cvec3 color = idToColor(idCounter_);
-  safe_glUniform3f(drawer_.getCurSS().h_uIdColor, color[0], color[1], color[2]);
-
+  drawer_.getUniforms().put("uIdColor", idColor);
   return drawer_.visit(node);
 }
 
@@ -40,9 +43,14 @@ bool Picker::postVisit(SgShapeNode& node) {
 }
 
 shared_ptr<SgRbtNode> Picker::getRbtNodeAtXY(int x, int y) {
-  PackedPixel pixel;
-  glReadPixels(x, y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &pixel);
-  return find(colorToId(pixel));
+  PackedPixel query;
+  glReadPixels(x, y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &query);
+  const int id = colorToId(query);
+
+  // DEBUG OUTPUT
+  // cerr << int(query.r) << ' ' << int(query.g) << ' ' << int(query.b) << " => " << id << endl;
+
+  return find(id);
 }
 
 //------------------

@@ -25,11 +25,12 @@ class Picker : public SgNodeVisitor {
 
   void addToMap(int id, std::shared_ptr<SgRbtNode> node);
   std::shared_ptr<SgRbtNode> find(int id);
+
   Cvec3 idToColor(int id);
   int colorToId(const PackedPixel& p);
 
 public:
-  Picker(const RigTForm& initialRbt, const ShaderState& curSS);
+  Picker(const RigTForm& initialRbt, Uniforms& uniforms);
 
   virtual bool visit(SgTransformNode& node);
   virtual bool postVisit(SgTransformNode& node);

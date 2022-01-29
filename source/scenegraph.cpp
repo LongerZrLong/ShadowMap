@@ -36,17 +36,25 @@ protected:
 public:
   RbtAccumVisitor(SgTransformNode& target)
     : target_(target)
-    , found_(false) {
-    rbtStack_.push_back(RigTForm());  // the first element is an identity RigTForm for code simplicity
-  }
+    , found_(false) {}
 
   const RigTForm getAccumulatedRbt(int offsetFromStackTop = 0) {
-    return rbtStack_[rbtStack_.size() - 1 - offsetFromStackTop];
+    if (!found_)
+      throw runtime_error("RbtAccumVisitor target never reached");
+    return rbtStack_[rbtStack_.size()-1-offsetFromStackTop];
   }
 
   virtual bool visit(SgTransformNode& node) {
-    rbtStack_.push_back(rbtStack_.back() * node.getRbt());
-    return node != target_;
+    if (rbtStack_.empty())
+      rbtStack_.push_back(RigTForm());
+    else
+      rbtStack_.push_back(rbtStack_.back() * node.getRbt());
+
+    if (target_ == node) {
+      found_ = true;
+      return false;
+    }
+    return true;
   }
 
   virtual bool postVisit(SgTransformNode& node) {

@@ -5,10 +5,11 @@
 #include <memory>
 #include <stdexcept>
 
-#include "cvec.h"
 #include "matrix4.h"
 #include "rigtform.h"
 #include "glsupport.h" // for Noncopyable
+#include "uniforms.h"
+#include "geometry.h"
 #include "asstcommon.h"
 
 class SgNodeVisitor;
@@ -66,7 +67,7 @@ public:
   virtual bool accept(SgNodeVisitor& visitor);
 
   virtual Matrix4 getAffineMatrix() = 0;
-  virtual void draw(const ShaderState& curSS) = 0;
+  virtual void draw(const Uniforms& uniforms) = 0;
 };
 
 
@@ -121,33 +122,44 @@ private:
   RigTForm rbt_;
 };
 
-// A SgGeometryShapeNode is a Shape node that wraps a user geometry class
-template<typename Geometry>
 class SgGeometryShapeNode : public SgShapeNode {
-  std::shared_ptr<Geometry> geometry_;
-  Matrix4 affineMatrix_;
-  Cvec3 color_;
 public:
-  SgGeometryShapeNode(std::shared_ptr<Geometry> geometry,
-                      const Cvec3& color,
+  std::shared_ptr<Geometry> geometry;
+  std::shared_ptr<Material> material;
+  Matrix4 affineMatrix;
+
+  SgGeometryShapeNode(std::shared_ptr<Geometry> _geometry,
+                      std::shared_ptr<Material> _material,
                       const Cvec3& translation = Cvec3(0, 0, 0),
                       const Cvec3& eulerAngles = Cvec3(0, 0, 0),
                       const Cvec3& scales = Cvec3(1, 1, 1))
-    : geometry_(geometry)
-    , color_(color)
-    , affineMatrix_(Matrix4::makeTranslation(translation) *
-                    Matrix4::makeXRotation(eulerAngles[0]) *
-                    Matrix4::makeYRotation(eulerAngles[1]) *
-                    Matrix4::makeZRotation(eulerAngles[2]) *
-                    Matrix4::makeScale(scales)) {}
+    : geometry(_geometry)
+    , material(_material)
+    , affineMatrix(Matrix4::makeTranslation(translation) *
+                   Matrix4::makeXRotation(eulerAngles[0]) *
+                   Matrix4::makeYRotation(eulerAngles[1]) *
+                   Matrix4::makeZRotation(eulerAngles[2]) *
+                   Matrix4::makeScale(scales)) {}
 
   virtual Matrix4 getAffineMatrix() {
-    return affineMatrix_;
+    return affineMatrix;
   }
 
-  virtual void draw(const ShaderState& curSS) {
-    safe_glUniform3f(curSS.h_uColor, color_[0], color_[1], color_[2]);
-    geometry_->draw(curSS);
+  void setAffineMatrix(const Cvec3& translation = Cvec3(0, 0, 0),
+                       const Cvec3& eulerAngles = Cvec3(0, 0, 0),
+                       const Cvec3& scales = Cvec3(1, 1, 1)) {
+    affineMatrix = Matrix4::makeTranslation(translation) *
+                   Matrix4::makeXRotation(eulerAngles[0]) *
+                   Matrix4::makeYRotation(eulerAngles[1]) *
+                   Matrix4::makeZRotation(eulerAngles[2]) *
+                   Matrix4::makeScale(scales);
+  }
+
+  virtual void draw(const Uniforms& uniforms) {
+    if (g_overridingMaterial)
+      g_overridingMaterial->draw(*geometry, uniforms);
+    else
+      material->draw(*geometry, uniforms);
   }
 };
 
