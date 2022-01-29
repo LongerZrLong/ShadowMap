@@ -26,8 +26,8 @@ class Script {
 
       size_t getFrameCount() { return frames_.size(); }
 
-      void reset();
-      void restoreInterpolate(double alpha);
+      void reset(size_t index = 0);
+      void restoreInterpolatedFrame(double alpha);
 
   public:
       friend ostream &operator<<(ostream &out, const Script &script);

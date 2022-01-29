@@ -126,20 +126,32 @@ void Script::load(const string &path) {
   }
 }
 
-void Script::reset() {
+void Script::reset(size_t index) {
+  if (index > frames_.size() - 1) return;
+
   iter_ = frames_.begin();
-  if (iter_ != frames_.end()) {
-    iter_->restore();
+  for (size_t i = 0; i < index; i++) {
+    iter_++;
   }
+
+  iter_->restore();
 }
 
-void Script::restoreInterpolate(double alpha) {
+void Script::restoreInterpolatedFrame(double alpha) {
   auto tmp = iter_;
-  Frame first = *tmp;
-  tmp++;
-  Frame second = *tmp;
+  tmp--;
+  Frame f0 = *tmp;
 
-  ::interpolate(first, second, alpha).restore();
+  tmp++;
+  Frame f1 = *tmp;
+
+  tmp++;
+  Frame f2 = *tmp;
+
+  tmp++;
+  Frame f3 = *tmp;
+
+  catmullRomInterpolate(f0, f1, f2, f3, alpha).restore();
 }
 
 ostream &operator<<(ostream &out, const Script &script) {

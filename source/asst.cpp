@@ -532,22 +532,22 @@ static void cycleSkyAMatrix() {
 // Given t in the range [0, n], perform interpolation and draw the scene
 // for the particular t. Returns true if we are at the end of the animation
 // sequence, or false otherwise.
-bool interpolateAndDisplay(float t) {
-  static int lastFrameIdx = 0;
-  int curFrameIdx = floor(t);
+static bool interpolateAndDisplay(float t) {
+  static int lastFrameIdx = 1;
+  int curFrameIdx = floor(t) + 1;
 
   if (curFrameIdx != lastFrameIdx) {
     g_script.advanceCurFrame();
     lastFrameIdx = curFrameIdx;
   }
 
-  if (lastFrameIdx == g_script.getFrameCount() - 1) {
-    lastFrameIdx = 0;
+  if (lastFrameIdx == g_script.getFrameCount() - 2) {
+    lastFrameIdx = 1;
     return true;
   }
 
   const float alpha = t - floor(t);
-  g_script.restoreInterpolate(alpha);
+  g_script.restoreInterpolatedFrame(alpha);
   glutPostRedisplay();
 
   return false;
@@ -573,7 +573,7 @@ static void toggleAnimation() {
       return;
     }
     g_isPlaying = true;
-    g_script.reset();
+    g_script.reset(1);
     animateTimerCallback(0);
   } else {
     g_isPlaying = false;

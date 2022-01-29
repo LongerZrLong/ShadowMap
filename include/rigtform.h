@@ -79,4 +79,41 @@ inline Matrix4 rigTFormToMatrix(const RigTForm &tform) {
   return T * R;
 }
 
+inline RigTForm interpolate(const RigTForm &rbt0, const RigTForm &rbt1, double alpha) {
+  return RigTForm(lerp(rbt0.getTranslation(), rbt1.getTranslation(), alpha),
+                  slerp(rbt0.getRotation(), rbt1.getRotation(), alpha));
+}
+
+inline RigTForm controlPoint(const RigTForm &rbt_minus, const RigTForm &rbt, const RigTForm &rbt_plus, double sign) {
+  static const double one_sixth = (double)1 / (double)6;
+
+  Cvec3 vec_minus = rbt_minus.getTranslation();
+  Cvec3 vec = rbt.getTranslation();
+  Cvec3 vec_plus = rbt_plus.getTranslation();
+
+  Cvec3 trans = (vec_plus - vec_minus) * one_sixth * sign + vec;
+
+  Quat quat_minus = rbt_minus.getRotation();
+  Quat quat = rbt.getRotation();
+  Quat quat_plus = rbt.getRotation();
+
+  Quat rot = (quat_plus == quat_minus) ? quat : pow(cn(quat_plus * inv(quat_minus)), one_sixth * sign) * quat;
+
+  return RigTForm(trans, rot);
+}
+
+inline RigTForm catmullRomInterpolate(const RigTForm &rbt0, const RigTForm &rbt1, const RigTForm &rbt2, const RigTForm &rbt3, double alpha) {
+
+  RigTForm ctrlPt0 = controlPoint(rbt0, rbt1, rbt2, 1.0);
+  RigTForm ctrlPt1 = controlPoint(rbt1, rbt2, rbt3, -1.0);
+
+  RigTForm t0 = interpolate(rbt1, ctrlPt0, alpha);
+  RigTForm t1 = interpolate(ctrlPt0, ctrlPt1, alpha);
+  RigTForm t2 = interpolate(ctrlPt1, rbt2, alpha);
+  RigTForm t3 = interpolate(t0, t1, alpha);
+  RigTForm t4 = interpolate(t1, t2, alpha);
+
+  return interpolate(t3, t4, alpha);
+}
+
 #endif

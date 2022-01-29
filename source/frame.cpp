@@ -83,3 +83,18 @@ Frame interpolate(const Frame &first, const Frame &second, double alpha) {
 
   return ret;
 }
+
+Frame catmullRomInterpolate(const Frame &f0, const Frame &f1, const Frame &f2, const Frame &f3, double alpha) {
+  Frame ret;
+  for (int i = 0; i < f0.frameRbts_.size(); i++) {
+    const RigTForm &rbt0 = f0.frameRbts_[i];
+    const RigTForm &rbt1 = f1.frameRbts_[i];
+    const RigTForm &rbt2 = f2.frameRbts_[i];
+    const RigTForm &rbt3 = f3.frameRbts_[i];
+
+    ret.frameRbts_.push_back(catmullRomInterpolate(rbt0, rbt1, rbt2, rbt3, alpha));
+    ret.nodePtrs_.push_back(f0.nodePtrs_[i]);
+  }
+
+  return ret;
+}

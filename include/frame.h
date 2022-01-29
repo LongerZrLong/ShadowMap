@@ -16,6 +16,7 @@ class Frame {
       void deserialize(shared_ptr<SgNode> root, const string &serialized);
 
       friend Frame interpolate(const Frame &first, const Frame &second, double alpha);
+      friend Frame catmullRomInterpolate(const Frame &f0, const Frame &f1, const Frame &f2, const Frame &f3, double alpha);
 
   private:
       vector<RigTForm> frameRbts_;
@@ -25,5 +26,6 @@ class Frame {
 };
 
 Frame interpolate(const Frame &first, const Frame &second, double alpha);
+Frame catmullRomInterpolate(const Frame &f0, const Frame &f1, const Frame &f2, const Frame &f3);
 
 #endif//FRAME_H
