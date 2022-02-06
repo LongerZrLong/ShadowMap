@@ -80,8 +80,10 @@ static bool g_isPicking = false;
 
 
 // --------- Material
-static shared_ptr<Material> g_redDiffuseMat,
+static shared_ptr<Material>
+        g_redDiffuseMat,
         g_blueDiffuseMat,
+        g_greenDiffuseMat,
         g_bumpFloorMat,
         g_arcballMat,
         g_pickingMat,
@@ -622,6 +624,10 @@ static void initMaterials() {
   g_blueDiffuseMat.reset(new Material(diffuse));
   g_blueDiffuseMat->getUniforms().put("uColor", Cvec3f(0, 0, 1));
 
+  // copy diffuse prototype and set green color
+  g_greenDiffuseMat.reset(new Material(diffuse));
+  g_greenDiffuseMat->getUniforms().put("uColor", Cvec3f(0, 1, 0));
+
   // normal mapping material
   g_bumpFloorMat.reset(new Material("./shaders/normal-gl2.vshader", "./shaders/normal-gl2.fshader"));
   g_bumpFloorMat->getUniforms().put("uTexColor", shared_ptr<Texture>(new ImageTexture("resource/Fieldstone.ppm", true)));
@@ -733,7 +739,7 @@ static void initScene() {
 
   g_groundNode.reset(new SgRbtNode());
   g_groundNode->addChild(shared_ptr<MyShapeNode>(
-          new MyShapeNode(g_ground, g_bumpFloorMat, Cvec3(0, g_groundY, 0))));
+          new MyShapeNode(g_ground, g_greenDiffuseMat, Cvec3(0, g_groundY, 0))));
 
   g_lightNode.reset(new SgRbtNode(RigTForm(Cvec3(2.0, 3.0, 14.0))));
   g_lightNode->addChild(shared_ptr<MyShapeNode>(
