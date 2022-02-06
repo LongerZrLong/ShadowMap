@@ -66,7 +66,7 @@ static const float g_frustMinFov = 60.0; // A minimal of 60 degree field of view
 static float g_frustFovY = g_frustMinFov;// FOV in y direction (updated by updateFrustFovY)
 
 static const float g_frustNear = -0.1; // near plane
-static const float g_frustFar = -50.0; // far plane
+static const float g_frustFar = -1000.0; // far plane
 static const float g_groundY = -2.0;   // y coordinate of the ground
 static const float g_groundSize = 10.0;// half the ground length
 
@@ -77,6 +77,11 @@ static bool g_mouseLClickButton, g_mouseRClickButton, g_mouseMClickButton;
 static int g_mouseClickX, g_mouseClickY;// coordinates for mouse click event
 
 static bool g_isPicking = false;
+
+// --------- Framebuffer
+static shared_ptr<GlFramebuffer> g_fbo;
+static shared_ptr<Texture> g_fboColorAttachment;
+static shared_ptr<Texture> g_fboDepthAttachment;
 
 
 // --------- Material
@@ -90,14 +95,15 @@ static shared_ptr<Material>
         g_lightMat;
 
 shared_ptr<Material> g_overridingMaterial;
+shared_ptr<Material> g_identityMat;
 
 
 // --------- Geometry
 
 typedef SgGeometryShapeNode MyShapeNode;
 
-// Vertex buffer and index buffer associated with the ground, cube and arcball geometry
-static shared_ptr<Geometry> g_ground, g_cube, g_sphere;
+// Vertex buffer and index buffer associated with the ground, cube, sphere, quad geometry
+static shared_ptr<Geometry> g_ground, g_cube, g_sphere, g_quad;
 
 
 // --------- Scene
@@ -128,6 +134,7 @@ static SkyFrame g_curSkyFrame = World_Sky;
 static double g_arcballScreenRadiusFactor = 0.2;
 static double g_arcballScreenRadius = g_arcballScreenRadiusFactor * min(g_windowWidth, g_windowHeight);
 static double g_arcballScale;
+static bool g_useWorldSkyArcball = false;
 
 
 // script
@@ -177,9 +184,18 @@ static void initSphere() {
   g_sphere.reset(new SimpleIndexedGeometryPNTBX(&vtx[0], &idx[0], vtx.size(), idx.size()));
 }
 
-// takes a projection matrix and send to the the shaders
-inline void sendProjectionMatrix(Uniforms &uniforms, const Matrix4 &projMatrix) {
-  uniforms.put("uProjMatrix", projMatrix);
+static void initQuad() {
+  // Temporary storage for quad Geometry
+  VertexPX vtx[4] = {
+          VertexPX(-1, -1, 0, 0, 0),
+          VertexPX(1, -1, 0, 1, 0),
+          VertexPX(1, 1, 0, 1, 1),
+          VertexPX(-1, 1, 0, 0, 1)
+  };
+
+  unsigned short idx[6] = {0, 1, 2, 2, 3, 0};
+
+  g_quad.reset(new SimpleIndexedGeometryPX(vtx, idx, 4, 6));
 }
 
 // update g_frustFovY from g_frustMinFov, g_windowWidth, and g_windowHeight
@@ -199,7 +215,7 @@ static Matrix4 makeProjectionMatrix() {
 }
 
 static bool isUsingArcball() {
-  if (*g_currentPickedRbtNode == *g_skyNode && g_curSkyFrame == World_Sky) {
+  if (g_useWorldSkyArcball && *g_currentPickedRbtNode == *g_skyNode && g_curSkyFrame == World_Sky) {
     return true;
   }
 
@@ -333,9 +349,22 @@ static void pick() {
 }
 
 static void display() {
+  // bind the created framebuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
+
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   drawStuff(false);
+
+  // bind the default framebuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  // draw the quad with newly rendered color attachment
+  Uniforms uniforms;
+  uniforms.put("uScreenTexture", g_fboColorAttachment);
+  g_identityMat->draw(*g_quad, uniforms);
 
   glutSwapBuffers();
 
@@ -611,6 +640,22 @@ static void initGLState() {
     glEnable(GL_FRAMEBUFFER_SRGB);
 }
 
+static void initFramebuffer() {
+  g_fbo.reset(new GlFramebuffer());
+  glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
+
+  g_fboColorAttachment.reset(new AttachmentTexture(g_windowWidth, g_windowHeight, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE));
+  g_fboDepthAttachment.reset(new AttachmentTexture(g_windowWidth, g_windowHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
+
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_fboColorAttachment->getGlTexture(), 0);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, g_fboDepthAttachment->getGlTexture(), 0);
+
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << endl;
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 static void initMaterials() {
   // Create some prototype materials
   Material diffuse("./shaders/basic-gl2.vshader", "./shaders/diffuse-gl2.fshader");
@@ -644,12 +689,16 @@ static void initMaterials() {
 
   // pick shader
   g_pickingMat.reset(new Material("./shaders/basic-gl2.vshader", "./shaders/pick-gl2.fshader"));
+
+  // identity material
+  g_identityMat.reset(new Material("./shaders/identity-gl2.vshader", "./shaders/identity-gl2.fshader"));
 }
 
 static void initGeometry() {
   initGround();
   initCubes();
   initSphere();
+  initQuad();
 }
 
 static void constructRobot(shared_ptr<SgTransformNode> base, shared_ptr<Material> material) {
@@ -735,7 +784,7 @@ static void constructRobot(shared_ptr<SgTransformNode> base, shared_ptr<Material
 static void initScene() {
   g_world.reset(new SgRootNode());
 
-  g_skyNode.reset(new SgRbtNode(RigTForm(Cvec3(0.0, 0.25, 4.0))));
+  g_skyNode.reset(new SgRbtNode(RigTForm(Cvec3(0.0, 1.0, 10.0))));
 
   g_groundNode.reset(new SgRbtNode());
   g_groundNode->addChild(shared_ptr<MyShapeNode>(
@@ -746,7 +795,7 @@ static void initScene() {
           new MyShapeNode(g_sphere, g_lightMat,
                           Cvec3(0,0,0),
                           Cvec3(0,0,0),
-                          Cvec3(0.5, 0.5, 0.5))
+                          Cvec3(0.2, 0.2, 0.2))
           ));
 
   g_robot1Node.reset(new SgRbtNode(RigTForm(Cvec3(-2, 1, 0))));
@@ -783,6 +832,7 @@ int main(int argc, char *argv[]) {
       throw runtime_error("Error: card/driver does not support OpenGL Shading Language v1.0");
 
     initGLState();
+    initFramebuffer();
     initMaterials();
     initGeometry();
     initScene();

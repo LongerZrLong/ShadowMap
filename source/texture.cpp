@@ -29,3 +29,12 @@ ImageTexture::ImageTexture(const char* ppmFileName, bool srgb) {
 
   checkGlErrors();
 }
+
+AttachmentTexture::AttachmentTexture(int width, int height, GLenum internalFormat, GLenum format, GLenum type) {
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  checkGlErrors();
+}

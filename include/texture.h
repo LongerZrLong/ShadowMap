@@ -3,6 +3,9 @@
 
 #include "glsupport.h"
 
+// forward declaration
+class Framebuffer;
+
 class Texture {
 protected:
   GlTexture tex;
@@ -16,6 +19,8 @@ public:
   virtual void bind() const = 0;
 
   virtual ~Texture() {}
+
+  virtual const GlTexture& getGlTexture() const { return tex; }
 };
 
 //----------------------------------------
@@ -38,6 +43,17 @@ public:
   }
 };
 
+class AttachmentTexture : public Texture {
+  public:
+      AttachmentTexture(int width, int height, GLenum internalFormat, GLenum format, GLenum type);
 
+      virtual GLenum getSamplerType() const {
+        return GL_SAMPLER_2D;
+      }
+
+      virtual void bind() const {
+        glBindTexture(GL_TEXTURE_2D, tex);
+      }
+};
 
 #endif

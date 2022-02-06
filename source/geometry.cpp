@@ -6,6 +6,10 @@
 
 using namespace std;
 
+const VertexFormat VertexPX::FORMAT = VertexFormat(sizeof(VertexPX))
+                                               .put("aPosition", 3, GL_FLOAT, GL_FALSE, offsetof(VertexPX, p))
+                                               .put("aTexCoord", 2, GL_FLOAT, GL_FALSE, offsetof(VertexPX, x));
+
 const VertexFormat VertexPN::FORMAT = VertexFormat(sizeof(VertexPN))
                                       .put("aPosition", 3, GL_FLOAT, GL_FALSE, offsetof(VertexPN, p))
                                       .put("aNormal", 3, GL_FLOAT, GL_FALSE, offsetof(VertexPN, n));

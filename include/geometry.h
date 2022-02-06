@@ -296,6 +296,36 @@ private:
 // Note that we define assignment operator (=) from GenericVertex
 // of geometrymaker.h so that we can use geometrymaker on any of these format
 
+// A vertex with float point Position
+struct VertexPX {
+  Cvec3f p;
+  Cvec2f x;
+  
+  static const VertexFormat FORMAT;
+
+  VertexPX() {}
+
+  VertexPX(float x, float y, float z,
+           float u, float v)
+      : p(x,y,z), x(u, v) {}
+
+  VertexPX(const Cvec3f& pos, const Cvec2f& texCoords)
+      : p(pos), x(texCoords) {}
+
+  // Define copy constructor and assignment operator from GenericVertex so we can
+  // use make* functions from geometrymaker.h
+  VertexPX(const GenericVertex& v) {
+    *this = v;
+  }
+
+  VertexPX & operator = (const GenericVertex& v) {
+    p = v.pos;
+    x = v.tex;
+    return *this;
+  }
+
+};
+
 // A vertex with floating point Position, and Normal;
 struct VertexPN {
   Cvec3f p, n;
@@ -466,11 +496,12 @@ private:
 };
 
 
-
+typedef SimpleUnindexedGeometry<VertexPX> SimpleGeometryPX;
 typedef SimpleUnindexedGeometry<VertexPN> SimpleGeometryPN;
 typedef SimpleUnindexedGeometry<VertexPNX> SimpleGeometryPNX;
 typedef SimpleUnindexedGeometry<VertexPNTBX> SimpleGeometryPNTBX;
 
+typedef SimpleIndexedGeometry<VertexPX, unsigned short> SimpleIndexedGeometryPX;
 typedef SimpleIndexedGeometry<VertexPN, unsigned short> SimpleIndexedGeometryPN;
 typedef SimpleIndexedGeometry<VertexPNX, unsigned short> SimpleIndexedGeometryPNX;
 typedef SimpleIndexedGeometry<VertexPNTBX, unsigned short> SimpleIndexedGeometryPNTBX;

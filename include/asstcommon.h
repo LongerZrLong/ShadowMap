@@ -19,4 +19,9 @@ inline void sendModelViewNormalMatrix(Uniforms& uniforms, const Matrix4& MVM, co
   uniforms.put("uModelViewMatrix", MVM).put("uNormalMatrix", NMVM);
 }
 
+// takes a projection matrix and send to the the shaders
+inline void sendProjectionMatrix(Uniforms &uniforms, const Matrix4 &projMatrix) {
+  uniforms.put("uProjMatrix", projMatrix);
+}
+
 #endif

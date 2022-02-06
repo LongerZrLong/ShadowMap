@@ -132,6 +132,28 @@ class GlBufferObject : Noncopyable {
   }
 };
 
+// Light wrapper around a GL framebuffer object handle that automatically allocates
+// and deallocates. Can be casted to a GLuint.
+class GlFramebuffer : Noncopyable {
+  protected:
+      GLuint handle_;
+
+  public:
+      GlFramebuffer() {
+        glGenFramebuffers(1, &handle_);
+        checkGlErrors();
+      }
+
+      ~GlFramebuffer() {
+        glDeleteFramebuffers(1, &handle_);
+      }
+
+      // Casts to GLuint so can be used directly glBindBuffer and so on
+      operator GLuint() const {
+        return handle_;
+      }
+};
+
 
 // Safe versions of various functions that handle GLSL shader attributes
 // and variables: These mainly issue a warning when specified attributes
