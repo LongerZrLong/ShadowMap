@@ -13,6 +13,9 @@
 extern const bool g_Gl2Compatible;
 
 extern std::shared_ptr<Material> g_overridingMaterial;
+extern std::shared_ptr<Material> g_shadowPassMat;
+
+extern bool g_isShadowPass;
 
 // takes MVM and its normal matrix to the shaders
 inline void sendModelViewNormalMatrix(Uniforms& uniforms, const Matrix4& MVM, const Matrix4& NMVM) {

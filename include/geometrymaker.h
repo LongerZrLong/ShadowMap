@@ -36,9 +36,9 @@ template<typename VtxOutIter, typename IdxOutIter>
 void makePlane(float size, VtxOutIter vtxIter, IdxOutIter idxIter) {
   float h = size / 2.0;
   *vtxIter = GenericVertex(-h, 0, -h, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, -1);
-  *(++vtxIter) = GenericVertex(-h, 0, h, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, -1);
+  *(++vtxIter) = GenericVertex(h, 0, -h, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, -1);
   *(++vtxIter) = GenericVertex(h, 0, h, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, -1);
-  *(++vtxIter) = GenericVertex(h, 0, -h, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, -1);
+  *(++vtxIter) = GenericVertex(-h, 0, h, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, -1);
   *idxIter = 0;
   *(++idxIter) = 1;
   *(++idxIter) = 2;

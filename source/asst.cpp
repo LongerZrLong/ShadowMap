@@ -89,7 +89,10 @@ static shared_ptr<Material>
         g_pickingMat,
         g_lightMat;
 
+static shared_ptr<Material> g_debugDepthMat;
+
 shared_ptr<Material> g_overridingMaterial;
+shared_ptr<Material> g_shadowPassMat;
 
 
 // --------- Geometry
@@ -142,8 +145,13 @@ static bool g_isPlaying = false;
 // shadow
 static shared_ptr<GlFramebuffer> g_depthMapFbo;
 static shared_ptr<Texture> g_depthMap;
-static shared_ptr<Material> g_shadowPassMat;
-static shared_ptr<Material> g_debugDepthMat;
+
+bool g_isShadowPass = false;
+
+static const int g_shadowTexWidth = 1024;
+static const int g_shadowTexHeight = 1024;
+
+static const float g_dirLightHalfArea = 1.0f;
 
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
@@ -278,6 +286,21 @@ static void drawArcball(Uniforms &uniforms, const RigTForm &viewRbt) {
   g_arcballMat->draw(*g_sphere, uniforms);
 }
 
+static void drawDepth() {
+  Uniforms uniforms;
+
+  // build & send proj. matrix to vshader
+  const Matrix4 projmat = Matrix4::makeProjection(-g_dirLightHalfArea, g_dirLightHalfArea, -g_dirLightHalfArea, g_dirLightHalfArea, 1.0f, -1.0f);
+  sendProjectionMatrix(uniforms, projmat);
+
+  // set eyeRbt
+  const RigTForm eyeRbt = getPathAccumRbt(g_world, g_lightNode);
+  const RigTForm invEyeRbt = inv(eyeRbt);
+
+  Drawer drawer(invEyeRbt, uniforms);
+  g_world->accept(drawer);
+}
+
 static void drawStuff(bool picking) {
   Uniforms uniforms;
 
@@ -349,24 +372,40 @@ static void pick() {
 }
 
 static void display() {
-  // bind the created framebuffer
-  glBindFramebuffer(GL_FRAMEBUFFER, g_depthMapFbo);
+  {
+    // shadow pass
+    g_isShadowPass = true;
+    glBindFramebuffer(GL_FRAMEBUFFER, g_depthMapFbo);
+    glViewport(0, 0, g_shadowTexWidth, g_shadowTexHeight);
+
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    drawDepth();
+
+    // bind the default framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, g_windowWidth, g_windowHeight);
+    g_isShadowPass = false;
+  }
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   drawStuff(false);
 
-  // bind the default framebuffer
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  {
+    // draw the quad for debugging depth map
+    glViewport(0, 0, g_windowWidth / 4, g_windowHeight / 4);
+    glDisable(GL_DEPTH_TEST);
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    Uniforms uniforms;
+    uniforms.put("uDepthMap", g_depthMap);
+    uniforms.put("uNearPlane", g_frustNear);
+    uniforms.put("uFarPlane", g_frustFar);
+    g_debugDepthMat->draw(*g_quad, uniforms);
 
-  // draw the quad with newly rendered color attachment
-  Uniforms uniforms;
-  uniforms.put("uDepthMap", g_depthMap);
-  uniforms.put("uNearPlane", g_frustNear);
-  uniforms.put("uFarPlane", g_frustFar);
-  g_debugDepthMat->draw(*g_quad, uniforms);
+    glEnable(GL_DEPTH_TEST);
+    glViewport(0, 0, g_windowWidth, g_windowHeight);
+  }
 
   glutSwapBuffers();
 
@@ -633,8 +672,7 @@ static void initGLState() {
   glClearDepth(0.);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  glCullFace(GL_BACK);
-  glEnable(GL_CULL_FACE);
+  glDisable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_GREATER);
   glReadBuffer(GL_BACK);
@@ -644,7 +682,7 @@ static void initGLState() {
 
 static void initShadowFbo() {
   // create a texture for depth attachment
-  g_depthMap.reset(new AttachmentTexture(g_windowWidth, g_windowHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
+  g_depthMap.reset(new AttachmentTexture(g_shadowTexWidth, g_shadowTexHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
 
   glBindTexture(GL_TEXTURE_2D, g_depthMap->getGlTexture());
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

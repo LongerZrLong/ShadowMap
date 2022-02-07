@@ -158,8 +158,11 @@ public:
   virtual void draw(const Uniforms& uniforms) {
     if (g_overridingMaterial)
       g_overridingMaterial->draw(*geometry, uniforms);
-    else
+    else if (g_isShadowPass) {
+      g_shadowPassMat->draw(*geometry, uniforms);
+    } else {
       material->draw(*geometry, uniforms);
+    }
   }
 };
 
