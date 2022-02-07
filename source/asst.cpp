@@ -293,11 +293,14 @@ static void drawDepth() {
   const Matrix4 projmat = Matrix4::makeProjection(-g_dirLightHalfArea, g_dirLightHalfArea, -g_dirLightHalfArea, g_dirLightHalfArea, 1.0f, -1.0f);
   sendProjectionMatrix(uniforms, projmat);
 
-  // set eyeRbt
+  // obtain lightViewRbt
   const RigTForm eyeRbt = getPathAccumRbt(g_world, g_lightNode);
-  const RigTForm invEyeRbt = inv(eyeRbt);
+  const Cvec3 lightPos = Cvec3(eyeRbt * Cvec4(0, 0, 0, 1));
 
-  Drawer drawer(invEyeRbt, uniforms);
+  Matrix4 lightView = Matrix4::lookAt(lightPos, Cvec3(0, 0, 0), Cvec3(0, 1, 0));
+  RigTForm lightViewRbt = matrixToRigTForm(lightView);
+
+  Drawer drawer(lightViewRbt, uniforms);
   g_world->accept(drawer);
 }
 

@@ -185,6 +185,17 @@ inline Quat slerp(const Quat &first, const Quat &second, double alpha) {
   return pow(cn(second * inv(first)), alpha) * first;
 }
 
+inline Quat matrixToQuat(const Matrix4 &mat) {
+  Quat quat;
+  quat[0] = sqrt(1.0 + mat(0, 0) + mat(1, 1) + mat(2, 2)) / 2.0;
+  double w4 = (4.0 * quat[0]);
+  quat[1] = (mat(2, 1) - mat(1, 2)) / w4 ;
+  quat[2] = (mat(0, 2) - mat(2, 0)) / w4 ;
+  quat[3] = (mat(1, 0) - mat(0, 1)) / w4 ;
+
+  return quat;
+}
+
 inline Matrix4 quatToMatrix(const Quat &q) {
   Matrix4 r;
   const double n = norm2(q);

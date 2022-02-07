@@ -216,6 +216,33 @@ class Matrix4 {
     r(3, 2) = -1.0;// 4th row
     return r;
   }
+
+  static Matrix4 lookAt(const Cvec3 &eye, const Cvec3 &center, const Cvec3 &up) {
+    Cvec3 f = normalize(center - eye);
+    Cvec3 u = normalize(up);
+    Cvec3 s = normalize(cross(f, u));
+    u = cross(s, f);
+
+    Matrix4 res = Matrix4();  // res is a 4x4 identity matrix
+
+    res(0, 0) = s[0];
+    res(0, 1) = s[1];
+    res(0, 2) = s[2];
+
+    res(1, 0) = u[0];
+    res(1, 1) = u[1];
+    res(1, 2) = u[2];
+
+    res(2, 0) = -f[0];
+    res(2, 1) = -f[1];
+    res(2, 2) = -f[2];
+
+    res(0, 3) = -dot(s, eye);
+    res(1, 3) = -dot(u, eye);
+    res(2, 3) =  dot(f, eye);
+
+    return res;
+  }
 };
 
 inline bool isAffine(const Matrix4 &m) {

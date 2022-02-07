@@ -73,6 +73,10 @@ inline RigTForm linFact(const RigTForm &tform) {
   return RigTForm(tform.getRotation());
 }
 
+inline RigTForm matrixToRigTForm(const Matrix4 &mat) {
+  return RigTForm(Cvec3(mat(0, 3), mat(1, 3), mat(2, 3)), matrixToQuat(mat));
+}
+
 inline Matrix4 rigTFormToMatrix(const RigTForm &tform) {
   Matrix4 T = Matrix4::makeTranslation(tform.getTranslation());
   Matrix4 R = quatToMatrix(tform.getRotation());
