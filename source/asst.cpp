@@ -66,7 +66,7 @@ static const float g_frustMinFov = 60.0; // A minimal of 60 degree field of view
 static float g_frustFovY = g_frustMinFov;// FOV in y direction (updated by updateFrustFovY)
 
 static const float g_frustNear = -0.1; // near plane
-static const float g_frustFar = -1000.0; // far plane
+static const float g_frustFar = -100.0; // far plane
 static const float g_groundY = -2.0;   // y coordinate of the ground
 static const float g_groundSize = 10.0;// half the ground length
 
@@ -77,11 +77,6 @@ static bool g_mouseLClickButton, g_mouseRClickButton, g_mouseMClickButton;
 static int g_mouseClickX, g_mouseClickY;// coordinates for mouse click event
 
 static bool g_isPicking = false;
-
-// --------- Framebuffer
-static shared_ptr<GlFramebuffer> g_fbo;
-static shared_ptr<Texture> g_fboColorAttachment;
-static shared_ptr<Texture> g_fboDepthAttachment;
 
 
 // --------- Material
@@ -95,7 +90,6 @@ static shared_ptr<Material>
         g_lightMat;
 
 shared_ptr<Material> g_overridingMaterial;
-shared_ptr<Material> g_identityMat;
 
 
 // --------- Geometry
@@ -144,6 +138,12 @@ static int g_msBetweenKeyFrames = 2000; // 2 seconds between keyframes
 static int g_animateFramesPerSecond = 60; // frames to render per second during animation playback
 
 static bool g_isPlaying = false;
+
+// shadow
+static shared_ptr<GlFramebuffer> g_depthMapFbo;
+static shared_ptr<Texture> g_depthMap;
+static shared_ptr<Material> g_shadowPassMat;
+static shared_ptr<Material> g_debugDepthMat;
 
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
@@ -350,7 +350,7 @@ static void pick() {
 
 static void display() {
   // bind the created framebuffer
-  glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
+  glBindFramebuffer(GL_FRAMEBUFFER, g_depthMapFbo);
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -363,8 +363,10 @@ static void display() {
 
   // draw the quad with newly rendered color attachment
   Uniforms uniforms;
-  uniforms.put("uScreenTexture", g_fboColorAttachment);
-  g_identityMat->draw(*g_quad, uniforms);
+  uniforms.put("uDepthMap", g_depthMap);
+  uniforms.put("uNearPlane", g_frustNear);
+  uniforms.put("uFarPlane", g_frustFar);
+  g_debugDepthMat->draw(*g_quad, uniforms);
 
   glutSwapBuffers();
 
@@ -640,19 +642,26 @@ static void initGLState() {
     glEnable(GL_FRAMEBUFFER_SRGB);
 }
 
-static void initFramebuffer() {
-  g_fbo.reset(new GlFramebuffer());
-  glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
+static void initShadowFbo() {
+  // create a texture for depth attachment
+  g_depthMap.reset(new AttachmentTexture(g_windowWidth, g_windowHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
 
-  g_fboColorAttachment.reset(new AttachmentTexture(g_windowWidth, g_windowHeight, GL_RGB, GL_RGB, GL_UNSIGNED_BYTE));
-  g_fboDepthAttachment.reset(new AttachmentTexture(g_windowWidth, g_windowHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
+  glBindTexture(GL_TEXTURE_2D, g_depthMap->getGlTexture());
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  float borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_fboColorAttachment->getGlTexture(), 0);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, g_fboDepthAttachment->getGlTexture(), 0);
+  // attach depth texture as FBO's depth buffer
+  g_depthMapFbo.reset(new GlFramebuffer());
+  glBindFramebuffer(GL_FRAMEBUFFER, g_depthMapFbo);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, g_depthMap->getGlTexture(), 0);
 
-  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << endl;
-
+  // don't check framebuffer completeness because we only have a depth attachment
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -690,8 +699,11 @@ static void initMaterials() {
   // pick shader
   g_pickingMat.reset(new Material("./shaders/basic-gl2.vshader", "./shaders/pick-gl2.fshader"));
 
-  // identity material
-  g_identityMat.reset(new Material("./shaders/identity-gl2.vshader", "./shaders/identity-gl2.fshader"));
+  // material for shadow pass
+  g_shadowPassMat.reset(new Material("./shaders/basic-gl2.vshader", "./shaders/depth-gl2.fshader"));
+
+  // material for debugging shadow
+  g_debugDepthMat.reset(new Material("./shaders/debug_depth-gl2.vshader", "./shaders/debug_depth-gl2.fshader"));
 }
 
 static void initGeometry() {
@@ -832,7 +844,7 @@ int main(int argc, char *argv[]) {
       throw runtime_error("Error: card/driver does not support OpenGL Shading Language v1.0");
 
     initGLState();
-    initFramebuffer();
+    initShadowFbo();
     initMaterials();
     initGeometry();
     initScene();

@@ -1,7 +1,6 @@
 attribute vec3 aPosition;
 attribute vec2 aTexCoord;
 
-varying vec3 vPosition;
 varying vec2 vTexCoord;
 
 void main() {
