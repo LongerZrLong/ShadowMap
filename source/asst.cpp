@@ -65,7 +65,7 @@ enum Key : int {
 static const float g_frustMinFov = 60.0; // A minimal of 60 degree field of view
 static float g_frustFovY = g_frustMinFov;// FOV in y direction (updated by updateFrustFovY)
 
-static const float g_frustNear = -0.1; // near plane
+static const float g_frustNear = -1.0; // near plane
 static const float g_frustFar = -100.0; // far plane
 static const float g_groundY = -2.0;   // y coordinate of the ground
 static const float g_groundSize = 10.0;// half the ground length
@@ -151,7 +151,10 @@ bool g_isShadowPass = false;
 static const int g_shadowTexWidth = 1024;
 static const int g_shadowTexHeight = 1024;
 
-static const float g_dirLightHalfArea = 1.0f;
+static const float g_lightFrustFov = 120.0f;
+static const float g_lightFrustFovY = g_lightFrustFov;
+static const float g_lightNear = -1.0f;
+static const float g_lightFar = -100.f;
 
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
@@ -290,7 +293,7 @@ static void drawDepth() {
   Uniforms uniforms;
 
   // build & send proj. matrix to vshader
-  const Matrix4 projmat = Matrix4::makeProjection(-g_dirLightHalfArea, g_dirLightHalfArea, -g_dirLightHalfArea, g_dirLightHalfArea, 1.0f, -1.0f);
+  const Matrix4 projmat = Matrix4::makeProjection(g_lightFrustFovY, g_shadowTexWidth / (float)g_shadowTexHeight, g_lightNear, g_lightFar);
   sendProjectionMatrix(uniforms, projmat);
 
   // obtain lightViewRbt

@@ -12,6 +12,6 @@ float LinearizeDepth(float depth) {
 
 void main() {
     float depthValue = texture2D(uDepthMap, vTexCoord).r;
-//    gl_FragColor = vec4(vec3((LinearizeDepth(depthValue) - uNearPlane) / uFarPlane), 1.0); // perspective
-    gl_FragColor = vec4(vec3(depthValue), 1.0); // orthographic
+    gl_FragColor = vec4(vec3(1.0 - (LinearizeDepth(depthValue) - uNearPlane) / uFarPlane), 1.0); // perspective
+//    gl_FragColor = vec4(vec3(depthValue), 1.0); // orthographic
 }
