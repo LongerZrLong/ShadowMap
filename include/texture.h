@@ -43,9 +43,9 @@ public:
   }
 };
 
-class AttachmentTexture : public Texture {
+class DepthTexture : public Texture {
   public:
-      AttachmentTexture(int width, int height, GLenum internalFormat, GLenum format, GLenum type);
+      DepthTexture(int width, int height, GLenum internalFormat, GLenum format, GLenum type);
 
       virtual GLenum getSamplerType() const {
         return GL_SAMPLER_2D;

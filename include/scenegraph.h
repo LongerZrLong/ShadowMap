@@ -128,18 +128,22 @@ public:
   std::shared_ptr<Material> material;
   Matrix4 affineMatrix;
 
+  bool castShadow;
+
   SgGeometryShapeNode(std::shared_ptr<Geometry> _geometry,
                       std::shared_ptr<Material> _material,
                       const Cvec3& translation = Cvec3(0, 0, 0),
                       const Cvec3& eulerAngles = Cvec3(0, 0, 0),
-                      const Cvec3& scales = Cvec3(1, 1, 1))
+                      const Cvec3& scales = Cvec3(1, 1, 1),
+                      bool castShadow = true)
     : geometry(_geometry)
     , material(_material)
     , affineMatrix(Matrix4::makeTranslation(translation) *
                    Matrix4::makeXRotation(eulerAngles[0]) *
                    Matrix4::makeYRotation(eulerAngles[1]) *
                    Matrix4::makeZRotation(eulerAngles[2]) *
-                   Matrix4::makeScale(scales)) {}
+                   Matrix4::makeScale(scales))
+    , castShadow(castShadow) {}
 
   virtual Matrix4 getAffineMatrix() {
     return affineMatrix;
@@ -159,7 +163,8 @@ public:
     if (g_overridingMaterial)
       g_overridingMaterial->draw(*geometry, uniforms);
     else if (g_isShadowPass) {
-      g_shadowPassMat->draw(*geometry, uniforms);
+      if (castShadow)
+        g_shadowPassMat->draw(*geometry, uniforms);
     } else {
       material->draw(*geometry, uniforms);
     }

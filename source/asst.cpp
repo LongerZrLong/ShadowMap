@@ -68,7 +68,7 @@ static float g_frustFovY = g_frustMinFov;// FOV in y direction (updated by updat
 static const float g_frustNear = -1.0; // near plane
 static const float g_frustFar = -100.0; // far plane
 static const float g_groundY = -2.0;   // y coordinate of the ground
-static const float g_groundSize = 10.0;// half the ground length
+static const float g_planeSize = 6.0;// half the ground length
 
 static int g_windowWidth = 1024;
 static int g_windowHeight = 768;
@@ -100,12 +100,12 @@ shared_ptr<Material> g_shadowPassMat;
 typedef SgGeometryShapeNode MyShapeNode;
 
 // Vertex buffer and index buffer associated with the ground, cube, sphere, quad geometry
-static shared_ptr<Geometry> g_ground, g_cube, g_sphere, g_quad;
+static shared_ptr<Geometry> g_plane, g_cube, g_sphere, g_quad;
 
 
 // --------- Scene
 static shared_ptr<SgRootNode> g_world;
-static shared_ptr<SgRbtNode> g_skyNode, g_groundNode;
+static shared_ptr<SgRbtNode> g_skyNode, g_boxNode;
 static shared_ptr<SgRbtNode> g_lightNode;
 static shared_ptr<SgRbtNode> g_robot1Node, g_robot2Node;
 
@@ -151,16 +151,15 @@ bool g_isShadowPass = false;
 static const int g_shadowTexWidth = 1024;
 static const int g_shadowTexHeight = 1024;
 
-static const float g_lightFrustFov = 90.0f;
-static const float g_lightFrustFovY = g_lightFrustFov;
-static const float g_lightNear = -1.0f;
-static const float g_lightFar = -100.f;
+static const float g_dirLightHalfArea = 1.0f;
+static const float g_dirLightNear = 1.0f;
+static const float g_dirLightFar = -1.f;
 
 
 ///////////////// END OF G L O B A L S //////////////////////////////////////////////////
 
 
-static void initGround() {
+static void initPlane() {
   int ibLen, vbLen;
   getPlaneVbIbLen(vbLen, ibLen);
 
@@ -168,8 +167,8 @@ static void initGround() {
   vector<VertexPNTBX> vtx(vbLen);
   vector<unsigned short> idx(ibLen);
 
-  makePlane(g_groundSize*2, vtx.begin(), idx.begin());
-  g_ground.reset(new SimpleIndexedGeometryPNTBX(&vtx[0], &idx[0], vbLen, ibLen));
+  makePlane(g_planeSize *2, vtx.begin(), idx.begin());
+  g_plane.reset(new SimpleIndexedGeometryPNTBX(&vtx[0], &idx[0], vbLen, ibLen));
 }
 
 static void initCubes() {
@@ -223,6 +222,12 @@ static Matrix4 makeProjectionMatrix() {
   return Matrix4::makeProjection(
           g_frustFovY, g_windowWidth / static_cast<double>(g_windowHeight),
           g_frustNear, g_frustFar);
+}
+
+static Matrix4 makeLightProjectionMatrix() {
+  return Matrix4::makeProjection(g_dirLightHalfArea, -g_dirLightHalfArea,
+                                 -g_dirLightHalfArea, g_dirLightHalfArea,
+                                 g_dirLightNear, g_dirLightFar);
 }
 
 static bool isUsingArcball() {
@@ -293,7 +298,7 @@ static void drawDepth() {
   Uniforms uniforms;
 
   // build & send proj. matrix to vshader
-  const Matrix4 projmat = Matrix4::makeProjection(g_lightFrustFovY, g_shadowTexWidth / (float)g_shadowTexHeight, g_lightNear, g_lightFar);
+  const Matrix4 projmat = makeLightProjectionMatrix();
   sendProjectionMatrix(uniforms, projmat);
 
   // obtain lightViewRbt
@@ -332,7 +337,7 @@ static void drawStuff(bool picking) {
   RigTForm lightViewRbt = matrixToRigTForm(lightView);
 
   const RigTForm eyeLightRbt = lightViewRbt * eyeRbt;
-  const Matrix4 lightProj = Matrix4::makeProjection(g_lightFrustFovY, g_shadowTexWidth / (float)g_shadowTexHeight, g_lightNear, g_lightFar);
+  const Matrix4 lightProj = makeLightProjectionMatrix();
 
   // send the eye space coordinates of lights to uniforms
   uniforms.put("uLight", eyeLight);
@@ -367,7 +372,7 @@ static void drawStuff(bool picking) {
 
     glFlush();
     g_currentPickedRbtNode = picker.getRbtNodeAtXY(g_mouseClickX, g_mouseClickY);
-    if (*g_currentPickedRbtNode == *g_groundNode || g_currentPickedRbtNode == nullptr)
+    if (*g_currentPickedRbtNode == *g_boxNode || g_currentPickedRbtNode == nullptr)
       g_currentPickedRbtNode = g_skyNode;
   }
 
@@ -705,15 +710,7 @@ static void initGLState() {
 
 static void initShadowFbo() {
   // create a texture for depth attachment
-  g_depthMap.reset(new AttachmentTexture(g_shadowTexWidth, g_shadowTexHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
-
-  glBindTexture(GL_TEXTURE_2D, g_depthMap->getGlTexture());
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-  float borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
-  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+  g_depthMap.reset(new DepthTexture(g_shadowTexWidth, g_shadowTexHeight, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT));
 
   // attach depth texture as FBO's depth buffer
   g_depthMapFbo.reset(new GlFramebuffer());
@@ -721,8 +718,11 @@ static void initShadowFbo() {
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, g_depthMap->getGlTexture(), 0);
 
   // don't check framebuffer completeness because we only have a depth attachment
+
+  // because we don't need to write or read the depth texture
   glDrawBuffer(GL_NONE);
   glReadBuffer(GL_NONE);
+
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -768,7 +768,7 @@ static void initMaterials() {
 }
 
 static void initGeometry() {
-  initGround();
+  initPlane();
   initCubes();
   initSphere();
   initQuad();
@@ -857,18 +857,36 @@ static void constructRobot(shared_ptr<SgTransformNode> base, shared_ptr<Material
 static void initScene() {
   g_world.reset(new SgRootNode());
 
-  g_skyNode.reset(new SgRbtNode(RigTForm(Cvec3(0.0, 1.0, 10.0))));
+  g_skyNode.reset(new SgRbtNode(RigTForm(Cvec3(0.0, 1.0, 25.0))));
 
-  g_groundNode.reset(new SgRbtNode());
-  g_groundNode->addChild(shared_ptr<MyShapeNode>(
-          new MyShapeNode(g_ground, g_greenDiffuseMat, Cvec3(0, g_groundY, 0),Cvec3(0,0,0),Cvec3(10, 10, 10))));
+  g_boxNode.reset(new SgRbtNode());
 
-  g_lightNode.reset(new SgRbtNode(RigTForm(Cvec3(2.0, 3.0, 14.0))));
+  // add ground
+  g_boxNode->addChild(shared_ptr<MyShapeNode>(
+          new MyShapeNode(g_plane, g_greenDiffuseMat,
+                          Cvec3(0, g_groundY, 0),
+                          Cvec3(0,0,0),
+                          Cvec3(1, 1, 1))));
+  // add wall
+  g_boxNode->addChild(shared_ptr<MyShapeNode>(
+          new MyShapeNode(g_plane, g_greenDiffuseMat,
+                          Cvec3(g_planeSize, g_planeSize + g_groundY, 0),
+                          Cvec3(0,0,90),
+                          Cvec3(1, 1, 1))));
+
+  g_boxNode->addChild(shared_ptr<MyShapeNode>(
+          new MyShapeNode(g_plane, g_greenDiffuseMat,
+                          Cvec3(0, g_planeSize + g_groundY, -g_planeSize),
+                          Cvec3(90,0,0),
+                          Cvec3(1, 1, 1))));
+
+  g_lightNode.reset(new SgRbtNode(RigTForm(Cvec3(2.0, 3.0, 10.0))));
   g_lightNode->addChild(shared_ptr<MyShapeNode>(
           new MyShapeNode(g_sphere, g_lightMat,
                           Cvec3(0,0,0),
                           Cvec3(0,0,0),
-                          Cvec3(0.2, 0.2, 0.2))
+                          Cvec3(0.2, 0.2, 0.2),
+                          false)
           ));
 
   g_robot1Node.reset(new SgRbtNode(RigTForm(Cvec3(-2, 1, 0))));
@@ -878,7 +896,7 @@ static void initScene() {
   constructRobot(g_robot2Node, g_blueDiffuseMat); // a Blue robot
 
   g_world->addChild(g_skyNode);
-  g_world->addChild(g_groundNode);
+  g_world->addChild(g_boxNode);
   g_world->addChild(g_lightNode);
   g_world->addChild(g_robot1Node);
   g_world->addChild(g_robot2Node);

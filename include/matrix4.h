@@ -182,18 +182,18 @@ class Matrix4 {
     Matrix4 r(0);
     // 1st row
     if (std::abs(right - left) > CS175_EPS) {
-      r(0, 0) = -2.0 * nearClip / (right - left);
+      r(0, 0) = 2.0 / (right - left);
       r(0, 2) = (right + left) / (right - left);
     }
     // 2nd row
     if (std::abs(top - bottom) > CS175_EPS) {
-      r(1, 1) = -2.0 * nearClip / (top - bottom);
+      r(1, 1) = 2.0 / (top - bottom);
       r(1, 2) = (top + bottom) / (top - bottom);
     }
     // 3rd row
     if (std::abs(farClip - nearClip) > CS175_EPS) {
       r(2, 2) = (farClip + nearClip) / (farClip - nearClip);
-      r(2, 3) = -2.0 * farClip * nearClip / (farClip - nearClip);
+      r(2, 3) = -2.0 / (farClip - nearClip);
     }
     r(3, 2) = -1.0;
     return r;
