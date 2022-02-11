@@ -151,7 +151,7 @@ bool g_isShadowPass = false;
 static const int g_shadowTexWidth = 1024;
 static const int g_shadowTexHeight = 1024;
 
-static const float g_lightFrustFov = 120.0f;
+static const float g_lightFrustFov = 90.0f;
 static const float g_lightFrustFovY = g_lightFrustFov;
 static const float g_lightNear = -1.0f;
 static const float g_lightFar = -100.f;
@@ -303,6 +303,9 @@ static void drawDepth() {
   Matrix4 lightView = Matrix4::lookAt(lightPos, Cvec3(0, 0, 0), Cvec3(0, 1, 0));
   RigTForm lightViewRbt = matrixToRigTForm(lightView);
 
+  uniforms.put("uEyeLightMatrix", Matrix4());
+  uniforms.put("uLightProjMatrix", Matrix4());
+
   Drawer drawer(lightViewRbt, uniforms);
   g_world->accept(drawer);
 }
@@ -318,10 +321,24 @@ static void drawStuff(bool picking) {
   const RigTForm eyeRbt = getPathAccumRbt(g_world, g_currentViewRbtNode);
   const RigTForm invEyeRbt = inv(eyeRbt);
 
-  const Cvec3 eyeLight = Cvec3(invEyeRbt * Cvec4(getPathAccumRbt(g_world, g_lightNode).getTranslation(), 1));
+  // light
+  const RigTForm lightRbt = getPathAccumRbt(g_world, g_lightNode);
+  const RigTForm invLightRbt = inv(lightRbt);
+
+  const Cvec3 eyeLight = Cvec3(invEyeRbt * Cvec4(lightRbt.getTranslation(), 1));
+
+  const Cvec3 lightPos = Cvec3(lightRbt * Cvec4(0,0,0, 1));
+  Matrix4 lightView = Matrix4::lookAt(lightPos, Cvec3(0, 0, 0), Cvec3(0, 1, 0));
+  RigTForm lightViewRbt = matrixToRigTForm(lightView);
+
+  const RigTForm eyeLightRbt = lightViewRbt * eyeRbt;
+  const Matrix4 lightProj = Matrix4::makeProjection(g_lightFrustFovY, g_shadowTexWidth / (float)g_shadowTexHeight, g_lightNear, g_lightFar);
 
   // send the eye space coordinates of lights to uniforms
   uniforms.put("uLight", eyeLight);
+  uniforms.put("uEyeLightMatrix", rigTFormToMatrix(eyeLightRbt));
+  uniforms.put("uLightProjMatrix", lightProj);
+  uniforms.put("uDepthMap", g_depthMap);
 
   setFrame();
 
@@ -844,7 +861,7 @@ static void initScene() {
 
   g_groundNode.reset(new SgRbtNode());
   g_groundNode->addChild(shared_ptr<MyShapeNode>(
-          new MyShapeNode(g_ground, g_greenDiffuseMat, Cvec3(0, g_groundY, 0))));
+          new MyShapeNode(g_ground, g_greenDiffuseMat, Cvec3(0, g_groundY, 0),Cvec3(0,0,0),Cvec3(10, 10, 10))));
 
   g_lightNode.reset(new SgRbtNode(RigTForm(Cvec3(2.0, 3.0, 14.0))));
   g_lightNode->addChild(shared_ptr<MyShapeNode>(
