@@ -84,7 +84,6 @@ static shared_ptr<Material>
         g_redDiffuseMat,
         g_blueDiffuseMat,
         g_greenDiffuseMat,
-        g_bumpFloorMat,
         g_arcballMat,
         g_pickingMat,
         g_lightMat;
@@ -492,7 +491,27 @@ static void motion(const int x, const int y) {
   setFrame();
 
   if (g_mouseClickDown) {
-    g_currentPickedRbtNode->setRbt(g_Frame * rigTForm * inv(g_Frame) * g_currentPickedRbtNode->getRbt());
+    if (*g_currentPickedRbtNode == *g_skyNode && g_mouseLClickButton && !g_mouseRClickButton) {
+      // Handle rotation of skyNode separately
+      if (g_curSkyFrame == World_Sky) {
+        // Orbit
+        RigTForm g_skyRbt = g_skyNode->getRbt();
+        RigTForm world_skyFrame = linFact(g_skyRbt);
+        g_skyRbt = world_skyFrame * RigTForm(Quat::makeXRotation(-dy_rotate)) * inv(world_skyFrame) * g_skyRbt;
+        g_skyRbt = RigTForm(Quat::makeYRotation(dx_rotate)) * g_skyRbt;
+        g_skyNode->setRbt(g_skyRbt);
+      } else {
+        // Ego Motion
+        RigTForm g_skyRbt = g_skyNode->getRbt();
+        RigTForm sky_worldFrame = transFact(g_skyRbt);
+        RigTForm sky_skyFrame = g_skyRbt;
+        g_skyRbt = sky_skyFrame * RigTForm(Quat::makeXRotation(-dy_rotate)) * inv(sky_skyFrame) * g_skyRbt;
+        g_skyRbt = sky_worldFrame * RigTForm(Quat::makeYRotation(dx_rotate)) * inv(sky_worldFrame) * g_skyRbt;
+        g_skyNode->setRbt(g_skyRbt);
+      }
+    } else {
+      g_currentPickedRbtNode->setRbt(g_Frame * rigTForm * inv(g_Frame) * g_currentPickedRbtNode->getRbt());
+    }
   }
 
   glutPostRedisplay();// we always redraw if we changed the scene
@@ -742,11 +761,6 @@ static void initMaterials() {
   // copy diffuse prototype and set green color
   g_greenDiffuseMat.reset(new Material(diffuse));
   g_greenDiffuseMat->getUniforms().put("uColor", Cvec3f(0, 1, 0));
-
-  // normal mapping material
-  g_bumpFloorMat.reset(new Material("./shaders/normal-gl2.vshader", "./shaders/normal-gl2.fshader"));
-  g_bumpFloorMat->getUniforms().put("uTexColor", shared_ptr<Texture>(new ImageTexture("resource/Fieldstone.ppm", true)));
-  g_bumpFloorMat->getUniforms().put("uTexNormal", shared_ptr<Texture>(new ImageTexture("resource/FieldstoneNormal.ppm", false)));
 
   // copy solid prototype, and set to wireframed rendering
   g_arcballMat.reset(new Material(solid));
