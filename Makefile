@@ -35,10 +35,10 @@ OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES))
 $(BASE): $(OBJ_FILES)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS) -lGLEW
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(OBJ_DIR) $(BIN_DIR)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@ -I$(INC_DIR)
 
-$(OBJ_DIR) $(BIN_DIR):
+$(OBJ_DIR):
 	mkdir $@
 
 clean:
