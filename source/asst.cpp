@@ -34,6 +34,8 @@
 
 #include "geometry.h"
 
+#include "tiny_obj_loader.h"
+
 using namespace std;// for string, vector, iostream, and other standard C++ stuff
 
 // G L O B A L S ///////////////////////////////////////////////////
@@ -56,6 +58,8 @@ using namespace std;// for string, vector, iostream, and other standard C++ stuf
 const bool g_Gl2Compatible = true;
 
 static const string SCRIPT_PATH = "./resource/script.txt" ;
+static const string OBJ_FILE_PATH = "./resource/girl_model/girl.obj";
+static const string TEX_FILE_PATH = "./resource/girl_model/MC003_Kozakura_Mari.png";
 
 enum Key : int {
   Esc = 27,
@@ -84,9 +88,11 @@ static shared_ptr<Material>
         g_redDiffuseMat,
         g_blueDiffuseMat,
         g_greenDiffuseMat,
+        g_grayDiffuseMat,
         g_arcballMat,
         g_pickingMat,
-        g_lightMat;
+        g_lightMat,
+        g_girlMat;
 
 static shared_ptr<Material> g_debugDepthMat;
 
@@ -106,7 +112,8 @@ static shared_ptr<Geometry> g_plane, g_cube, g_sphere, g_quad;
 static shared_ptr<SgRootNode> g_world;
 static shared_ptr<SgRbtNode> g_skyNode, g_boxNode;
 static shared_ptr<SgRbtNode> g_lightNode;
-static shared_ptr<SgRbtNode> g_robot1Node, g_robot2Node;
+static shared_ptr<SgRbtNode> g_robot1Node;
+static shared_ptr<SgRbtNode> g_girlNode;
 
 static const int g_numObjects = 2;
 static const int g_numViews = g_numObjects + 1;// plus 1 because of the sky
@@ -127,7 +134,8 @@ static SkyFrame g_curSkyFrame = World_Sky;
 
 
 // arcball
-static double g_arcballScreenRadiusFactor = 0.2;
+static bool g_isUsingArcball = true;
+static double g_arcballScreenRadiusFactor = 0.1;
 static double g_arcballScreenRadius = g_arcballScreenRadiusFactor * min(g_windowWidth, g_windowHeight);
 static double g_arcballScale;
 static bool g_useWorldSkyArcball = false;
@@ -147,10 +155,10 @@ static shared_ptr<Texture> g_depthMap;
 
 bool g_isShadowPass = false;
 
-static const int g_shadowTexWidth = 1024;
-static const int g_shadowTexHeight = 1024;
+static const int g_shadowTexWidth = 2048;
+static const int g_shadowTexHeight = 2048;
 
-static const float g_dirLightHalfArea = 1.0f;
+static const float g_dirLightHalfArea = 2.0f;
 static const float g_dirLightNear = 1.0f;
 static const float g_dirLightFar = -1.f;
 
@@ -230,6 +238,10 @@ static Matrix4 makeLightProjectionMatrix() {
 }
 
 static bool isUsingArcball() {
+  if (!g_isUsingArcball) {
+    return false;
+  }
+
   if (g_useWorldSkyArcball && *g_currentPickedRbtNode == *g_skyNode && g_curSkyFrame == World_Sky) {
     return true;
   }
@@ -558,11 +570,6 @@ static void cycleView() {
       g_currentViewRbtNode = g_robot1Node;
       break;
     }
-    case 2: {
-      cout << "View from robot 2" << endl;
-      g_currentViewRbtNode = g_robot2Node;
-      break;
-    }
   }
 }
 
@@ -762,6 +769,10 @@ static void initMaterials() {
   g_greenDiffuseMat.reset(new Material(diffuse));
   g_greenDiffuseMat->getUniforms().put("uColor", Cvec3f(0, 1, 0));
 
+  // copy diffuse prototype and set gray color
+  g_grayDiffuseMat.reset(new Material(diffuse));
+  g_grayDiffuseMat->getUniforms().put("uColor", Cvec3f(0.8, 0.8, 0.8));
+
   // copy solid prototype, and set to wireframed rendering
   g_arcballMat.reset(new Material(solid));
   g_arcballMat->getUniforms().put("uColor", Cvec3f(0.27f, 0.82f, 0.35f));
@@ -770,6 +781,11 @@ static void initMaterials() {
   // copy solid prototype, and set to color white
   g_lightMat.reset(new Material(solid));
   g_lightMat->getUniforms().put("uColor", Cvec3f(1, 1, 1));
+
+  // girl material
+  Material diffTex("./shaders/basic-gl2.vshader", "./shaders/diffuseTex-gl2.fshader");
+  g_girlMat.reset(new Material(diffTex));
+  g_girlMat->getUniforms().put("uDiffTex", shared_ptr<Texture>(new ImageTexture(TEX_FILE_PATH.c_str(), true)));
 
   // pick shader
   g_pickingMat.reset(new Material("./shaders/basic-gl2.vshader", "./shaders/pick-gl2.fshader"));
@@ -868,6 +884,57 @@ static void constructRobot(shared_ptr<SgTransformNode> base, shared_ptr<Material
   }
 }
 
+static shared_ptr<MyShapeNode> loadObj(const char* fileName, shared_ptr<Material> material) {
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+
+  std::string err;
+  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, fileName);
+
+  if (!err.empty()) {
+    std::cerr << "ERR: " << err << std::endl;
+  }
+
+  if (!ret) {
+    std::cerr << "Failed to load/parse .obj.\n";
+    assert(false);
+  }
+
+  auto vertices = vector<VertexPNX>();
+
+  for (const auto& shape : shapes) {
+    for (const auto& index : shape.mesh.indices) {
+
+      VertexPNX vertex;
+
+      vertex.p = Cvec3f(
+              attrib.vertices[3 * index.vertex_index + 0],
+              attrib.vertices[3 * index.vertex_index + 1],
+              attrib.vertices[3 * index.vertex_index + 2]
+      );
+
+      vertex.x = Cvec2f(
+              attrib.texcoords[2 * index.texcoord_index + 0],
+              attrib.texcoords[2 * index.texcoord_index + 1]
+      );
+
+      vertex.n = Cvec3f(
+              attrib.normals[3 * index.normal_index + 0],
+              attrib.normals[3 * index.normal_index + 1],
+              attrib.normals[3 * index.normal_index + 2]
+      );
+
+      // Not using indices here for simplicity
+      vertices.push_back(vertex);
+    }
+  }
+
+  auto geometry = make_shared<SimpleGeometryPNX>(vertices.data(), vertices.size());
+
+  return make_shared<MyShapeNode>(geometry, material);
+}
+
 static void initScene() {
   g_world.reset(new SgRootNode());
 
@@ -877,24 +944,24 @@ static void initScene() {
 
   // add ground
   g_boxNode->addChild(shared_ptr<MyShapeNode>(
-          new MyShapeNode(g_plane, g_greenDiffuseMat,
+          new MyShapeNode(g_plane, g_grayDiffuseMat,
                           Cvec3(0, g_groundY, 0),
                           Cvec3(0,0,0),
                           Cvec3(1, 1, 1))));
   // add wall
   g_boxNode->addChild(shared_ptr<MyShapeNode>(
-          new MyShapeNode(g_plane, g_greenDiffuseMat,
+          new MyShapeNode(g_plane, g_grayDiffuseMat,
                           Cvec3(g_planeSize, g_planeSize + g_groundY, 0),
                           Cvec3(0,0,90),
                           Cvec3(1, 1, 1))));
 
   g_boxNode->addChild(shared_ptr<MyShapeNode>(
-          new MyShapeNode(g_plane, g_greenDiffuseMat,
+          new MyShapeNode(g_plane, g_grayDiffuseMat,
                           Cvec3(0, g_planeSize + g_groundY, -g_planeSize),
                           Cvec3(90,0,0),
                           Cvec3(1, 1, 1))));
 
-  g_lightNode.reset(new SgRbtNode(RigTForm(Cvec3(2.0, 3.0, 10.0))));
+  g_lightNode.reset(new SgRbtNode(RigTForm(Cvec3(-10.0, 4.0, 10.0))));
   g_lightNode->addChild(shared_ptr<MyShapeNode>(
           new MyShapeNode(g_sphere, g_lightMat,
                           Cvec3(0,0,0),
@@ -903,19 +970,24 @@ static void initScene() {
                           false)
           ));
 
-  g_robot1Node.reset(new SgRbtNode(RigTForm(Cvec3(-2, 1, 0))));
-  g_robot2Node.reset(new SgRbtNode(RigTForm(Cvec3(2, 1, 0))));
+  g_robot1Node.reset(new SgRbtNode(RigTForm(Cvec3(-3, 1, 0))));
 
   constructRobot(g_robot1Node, g_redDiffuseMat); // a Red robot
-  constructRobot(g_robot2Node, g_blueDiffuseMat); // a Blue robot
+
+  g_girlNode.reset(new SgRbtNode(RigTForm(Cvec3(0, 1, 0))));
+  auto ptr = loadObj(OBJ_FILE_PATH.c_str(), g_girlMat);
+  ptr->setAffineMatrix(Cvec3(0,-3,0),
+                       Cvec3(0,0,0),
+                       Cvec3(2, 2, 2));
+  g_girlNode->addChild(ptr);
 
   g_world->addChild(g_skyNode);
   g_world->addChild(g_boxNode);
   g_world->addChild(g_lightNode);
-  g_world->addChild(g_robot1Node);
-  g_world->addChild(g_robot2Node);
+//  g_world->addChild(g_robot1Node);
+  g_world->addChild(g_girlNode);
 
-  // initialize current current picked and current view
+  // initialize current picked and current view
   g_currentPickedRbtNode = g_skyNode;
   g_currentViewRbtNode = g_skyNode;
 }

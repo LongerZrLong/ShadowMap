@@ -1,33 +1,57 @@
 #include <vector>
 
 #include "ppm.h"
+#include "stb_image.h"
 #include "glsupport.h"
 #include "texture.h"
 #include "asstcommon.h"
 
 using namespace std;
 
-ImageTexture::ImageTexture(const char* ppmFileName, bool srgb) {
-  int width, height;
-  vector<PackedPixel> pixData;
-  ppmRead(ppmFileName, width, height, pixData);
+ImageTexture::ImageTexture(const char* filename, bool srgb) {
+  stbi_set_flip_vertically_on_load(true);
 
-  glBindTexture(GL_TEXTURE_2D, tex);
-  if (g_Gl2Compatible)
-    glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+  int width, height, channel;
 
-  glTexImage2D(GL_TEXTURE_2D, 0, (!srgb) || g_Gl2Compatible ? GL_RGB : GL_SRGB, width, height,
-               0, GL_RGB, GL_UNSIGNED_BYTE, &pixData[0]);
+  unsigned char *data = stbi_load(filename, &width, &height, &channel, 0);
+  if (data)
+  {
+    GLenum format;
+    if (channel == 1)
+      format = GL_RED;
+    else if (channel == 3)
+      format = (!srgb) || g_Gl2Compatible ? GL_RGB : GL_SRGB;
+    else if (channel == 4)
+      format = (!srgb) || g_Gl2Compatible ? GL_RGBA : GL_SRGB_ALPHA;
+    else {
+      fprintf(stderr, "Unexpected number of channel: %d in file %s\n", channel, filename);
+      assert(false);
+    }
 
-  if (!g_Gl2Compatible)
-    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, tex);
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (g_Gl2Compatible)
+      glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 
-  checkGlErrors();
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+    if (!g_Gl2Compatible)
+      glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    stbi_image_free(data);
+
+    checkGlErrors();
+  }
+  else
+  {
+    std::cout << "Texture failed to load at path: " << filename << std::endl;
+    stbi_image_free(data);
+  }
 }
 
 DepthTexture::DepthTexture(int width, int height, GLenum internalFormat, GLenum format, GLenum type) {
